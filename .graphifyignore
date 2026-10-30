@@ -1,0 +1,14 @@
+# Graphify / Claude generated tooling
+.claude/
+
+# Graphify's generated output
+graphify-out/
+
+# Dependencies, build output and caches (also in .gitignore)
+node_modules/
+src-tauri/target/
+src-tauri/gen/
+dist/
+.next/
+out/
+.env*

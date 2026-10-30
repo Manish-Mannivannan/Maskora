@@ -1,0 +1,21 @@
+{
+  "0": "sync-plan-issues.mjs",
+  "1": "compilerOptions",
+  "2": "package.json",
+  "3": "tauri.conf.json",
+  "4": "devDependencies",
+  "5": "default.json",
+  "6": "icon",
+  "7": "compilerOptions",
+  "8": "App",
+  "9": "lib.rs",
+  "10": "Tauri + React + Typescript",
+  "11": "CLAUDE.md",
+  "12": "build.rs",
+  "13": "main.rs",
+  "14": "maskora",
+  "15": "vite-env.d.ts",
+  "16": "vite.config.ts",
+  "17": "dependencies",
+  "18": "prefix-graphify-vault.mjs"
+}
