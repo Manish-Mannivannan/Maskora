@@ -360,8 +360,8 @@ try {
   );
   const g3 = expected("G3").pages;
   const nativeOk =
-    Array.isArray(native) &&
-    native.every(
+    Array.isArray(native?.pages) &&
+    native.pages.every(
       (p, i) =>
         p.boxes.every(([name, fact]) => same(fact, g3[i].boxes[name])) && same(p.rotate, g3[i].rotate),
     );

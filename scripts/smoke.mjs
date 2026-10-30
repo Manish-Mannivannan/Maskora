@@ -20,13 +20,14 @@
  * meant to be read. Exits 1 on the first failed check.
  */
 import { execFile } from "node:child_process";
-import { statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { ROOT, openApp } from "./webdriver.mjs";
 
 const run = promisify(execFile);
-const FIXTURE = join(ROOT, "tests", "fixtures", "pdf", "G1.pdf");
+const FIXTURES = join(ROOT, "tests", "fixtures", "pdf");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let passed = 0;
@@ -65,6 +66,56 @@ const drag = async (from, dx, dy, button = 0) => {
   await sleep(150);
 };
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+const dialog = (args) =>
+  run("powershell", [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    join(ROOT, "scripts", "dialog.ps1"),
+    ...args,
+  ]);
+const q = (script, ...args) => app.exec(script, ...args);
+const status = async () => {
+  const el = await app.find('[data-testid="doc-status"]');
+  return { state: await app.attr(el, "data-state"), text: await app.text(el) };
+};
+/** Open a fixture through the real dialog and wait until it settles. */
+const pick = async (id) => {
+  await app.click(await app.find('[data-testid="open-pdf"]'));
+  await dialog(["-Path", join(FIXTURES, `${id}.pdf`)]);
+  for (let i = 0; i < 120; i += 1) {
+    const s = await status();
+    if (!["selecting", "loading"].includes(s.state)) return s;
+    await sleep(250);
+  }
+  throw new Error(`${id} did not finish opening`);
+};
+const waitUntil = async (what, script, timeoutMs = 20000) => {
+  const until = Date.now() + timeoutMs;
+  for (;;) {
+    const v = await q(script);
+    if (v) return v;
+    if (Date.now() > until) throw new Error(`timed out waiting for ${what}`);
+    await sleep(200);
+  }
+};
+const diagnostics = () =>
+  q(
+    `return [...document.querySelectorAll('[data-testid="diagnostics"] li')].map(li => li.dataset.code + ":" + li.dataset.level);`,
+  );
+const boxOrigins = () =>
+  q(
+    `return Object.fromEntries([...document.querySelectorAll('[data-testid="box-table"] tbody tr')].map(r => [r.dataset.box, r.dataset.origin]));`,
+  );
+const selectThumb = async (index) => {
+  await app.click(await app.find(`[data-testid="thumb"][data-index="${index}"]`));
+  await waitUntil(
+    `inspector page ${index}`,
+    `return document.querySelector('[data-testid="inspector"]')?.dataset.page === "${index}";`,
+  );
+};
 const distance = (p) => Math.hypot(...p);
 
 try {
@@ -162,36 +213,210 @@ try {
   expect(Math.abs(w1 - w0 - 120) <= 2, `panel width ${w0} → ${w1}, expected +120`);
   ok("panel resizes by drag", `${w0} → ${w1} px`);
 
-  // Native selection: cancel, then a real file.
+  // Native selection: cancel, then documents that exercise every state.
   await app.click(await app.find('[data-testid="open-pdf"]'));
-  await run("powershell", [
-    "-NoProfile",
-    "-ExecutionPolicy",
-    "Bypass",
-    "-File",
-    join(ROOT, "scripts", "dialog.ps1"),
-    "-Cancel",
-  ]);
+  await dialog(["-Cancel"]);
   await app.waitFor('[data-testid="doc-status"][data-state="cancelled"]');
-  ok("a cancelled dialog reads as cancelled", await app.text(await app.find('[data-testid="doc-status"]')));
+  ok("a cancelled dialog reads as cancelled", (await status()).text);
 
-  await app.click(await app.find('[data-testid="open-pdf"]'));
-  await run("powershell", [
-    "-NoProfile",
-    "-ExecutionPolicy",
-    "Bypass",
-    "-File",
-    join(ROOT, "scripts", "dialog.ps1"),
-    "-Path",
-    FIXTURE,
-  ]);
-  await app.waitFor('[data-testid="doc-status"][data-state="loaded"]', 30000);
-  const loaded = await app.text(await app.find('[data-testid="doc-status"]'));
-  const size = statSync(FIXTURE).size;
-  expect(loaded.includes(`${size} bytes read locally`), `expected ${size} bytes: ${loaded}`);
-  expect(loaded.includes("%PDF-1.7") && loaded.includes("1 page"), `unexpected document status: ${loaded}`);
-  ok("dialog-selected file read through its handle and parsed by local PDF.js", loaded);
-  ok("screenshot", await app.screenshot("04-document-loaded"));
+  // D1: mixed sizes and labels, identity, both readers, progressive thumbnails.
+  const d1 = await pick("D1");
+  expect(d1.state === "ready", `D1: ${JSON.stringify(d1)}`);
+  await waitUntil(
+    "D1 thumbnails",
+    `return document.querySelectorAll('[data-testid="thumb"][data-state="rendered"]').length === 5;`,
+  );
+  await waitUntil(
+    "D1 geometry",
+    `return document.querySelector('[data-testid="geometry-status"]')?.dataset.status === "available";`,
+  );
+  const want = JSON.parse(readFileSync(join(FIXTURES, "D1.expected.json"), "utf8"));
+  const labels = await q(
+    `return [...document.querySelectorAll('[data-testid="thumb-label"]')].map(e => e.textContent);`,
+  );
+  expect(
+    labels.every((l, i) => l.startsWith(`${want.labels[i]} · p. ${i + 1}/5`)),
+    `labels ${JSON.stringify(labels)}`,
+  );
+  const sizes = await q(`return [...document.querySelectorAll('.thumb-size')].map(e => e.textContent);`);
+  want.pages.forEach((p, i) => {
+    const text = `${p.trimSizeMm[0].toFixed(1)} × ${p.trimSizeMm[1].toFixed(1)} mm`;
+    expect(sizes[i].startsWith(text), `page ${i} size ${sizes[i]}, expected ${text}`);
+  });
+  expect(sizes[3].includes("90°"), `page 4 rotation missing: ${sizes[3]}`);
+  const digest = await app.attr(await app.find('[data-testid="digest"]'), "title");
+  const fileDigest = createHash("sha256")
+    .update(readFileSync(join(FIXTURES, "D1.pdf")))
+    .digest("hex");
+  expect(digest === fileDigest, `digest ${digest} != ${fileDigest}`);
+  const d1Diagnostics = await diagnostics();
+  expect(d1Diagnostics.length === 0, `unexpected diagnostics ${d1Diagnostics}`);
+  ok("D1: 5 progressive thumbnails with labels i, ii, 1, 2, A-1 and trim sizes in mm", sizes.join(" | "));
+  const overflow = await q(`
+    return [...document.querySelectorAll('.thumb-frame')].filter(f => {
+      const a = f.getBoundingClientRect(), b = f.querySelector('canvas').getBoundingClientRect();
+      return b.width > a.width + 0.5 || b.height > a.height + 0.5;
+    }).length;`);
+  expect(overflow === 0, `${overflow} thumbnails overflow their frame`);
+  // The first page's preview starts before native geometry and is replaced when it arrives.
+  await app.waitFor(
+    '[data-testid="inspector"][data-page="0"] [data-testid="box-preview"][data-state="rendered"]',
+  );
+  ok("every thumbnail fits its frame; the first page's preview survives the arrival of native geometry");
+  ok("source identity is the file's SHA-256; the native reader agrees with PDF.js", digest.slice(0, 16));
+
+  const metaBefore = await app.attr(await app.find('[data-testid="metadata-status"]'), "data-status");
+  expect(metaBefore === "notRequested", `metadata read before it was asked for: ${metaBefore}`);
+  await app.click(await app.find('[data-testid="doc-details"] summary'));
+  await app.waitFor('[data-testid="metadata"][data-status="available"]');
+  const title = await q(`return document.querySelector('[data-field="Title"] dd').textContent;`);
+  const xmp = await q(`return document.querySelector('[data-testid="xmp"] .cap').dataset.status;`);
+  expect(title === want.info.Title && xmp === "unsupported", `title ${title}, xmp ${xmp}`);
+  ok("document details are read only when opened; XMP shows as unsupported, not absent", `Title "${title}"`);
+  ok("screenshot", await app.screenshot("04-d1-document"));
+
+  await selectThumb(4);
+  await app.waitFor('[data-testid="box-preview"][data-state="rendered"]');
+  const a1 = await boxOrigins();
+  expect(
+    a1.TrimBox === "explicit" && a1.BleedBox === "explicit" && a1.CropBox === "default",
+    JSON.stringify(a1),
+  );
+  ok(
+    "page A-1: stated trim and bleed, defaulted crop, preview rendered with boxes outlined",
+    JSON.stringify(a1),
+  );
+  ok("screenshot", await app.screenshot("05-d1-inspector"));
+  await selectThumb(3);
+  const rot = await app.text(await app.find('[data-testid="rotation"]'));
+  expect(rot.startsWith("90°"), rot);
+  ok("page 2 (Letter) shows its 90° rotation", rot);
+
+  // G2: an override replaces the effective box and keeps the source fact.
+  expect((await pick("G2")).state === "ready", "G2 did not open");
+  await waitUntil(
+    "G2 boxes",
+    `return document.querySelector('[data-testid="box-table"] tr[data-box="TrimBox"]')?.dataset.origin === "default";`,
+  );
+  const inset = await app.find('[data-testid="trim-inset"]');
+  await app.clear(inset);
+  await app.type(inset, "3");
+  await app.click(await app.find('[data-testid="set-trim"]'));
+  await waitUntil(
+    "trim override",
+    `return document.querySelector('tr[data-box="TrimBox"]').dataset.origin === "override";`,
+  );
+  const fact = await app.text(await app.find('[data-testid="source-fact"]'));
+  expect(fact.includes("format default"), `source fact lost: ${fact}`);
+  ok("a manual trim replaces the effective TrimBox; the file's default stays listed", fact.trim());
+  ok("screenshot", await app.screenshot("06-g2-override"));
+  await app.click(await app.find('[data-testid="clear-overrides"]'));
+  await waitUntil(
+    "override cleared",
+    `return document.querySelector('tr[data-box="TrimBox"]').dataset.origin === "default";`,
+  );
+  ok("clearing the override restores the source fact");
+
+  // G5: an invalid rotation is diagnosed and shown as invalid.
+  expect((await pick("G5")).state === "ready", "G5 did not open");
+  await waitUntil("G5 diagnostics", `return !!document.querySelector('[data-code="invalidRotation"]');`);
+  await selectThumb(3);
+  const invalid = await app.attr(await app.find('[data-testid="rotation"]'), "data-invalid");
+  expect(invalid === "true", "Rotate 45 not shown as invalid");
+  ok(
+    "Rotate 45 is diagnosed and shown as invalid, not as 0°",
+    await app.text(await app.find('[data-testid="rotation"]')),
+  );
+
+  // O1: layers that change for printing produce a visible limitation.
+  expect((await pick("O1")).state === "ready", "O1 did not open");
+  await waitUntil(
+    "O1 limitation",
+    `return !!document.querySelector('[data-code="printLayersDiffer"][data-level="limitation"]');`,
+  );
+  ok("layers that change for printing show a limitation", (await diagnostics()).join(", "));
+  ok("screenshot", await app.screenshot("07-o1-limitation"));
+
+  // E1b: password needed, wrong, right; no password stays in the page.
+  const e1 = await pick("E1b");
+  expect(e1.state === "password" && e1.text.includes("needs a password"), JSON.stringify(e1));
+  await app.type(await app.find('[data-testid="password"]'), "smoke-wrong-pass");
+  await app.click(await app.find('[data-testid="password-submit"]'));
+  await waitUntil(
+    "wrong password",
+    `return document.querySelector('form.password')?.dataset.attempt === "wrong";`,
+  );
+  const wrong = (await status()).text;
+  await app.type(await app.find('[data-testid="password"]'), "maskora");
+  await app.click(await app.find('[data-testid="password-submit"]'));
+  await app.waitFor('[data-testid="doc-status"][data-state="ready"]');
+  const leaked = await q(
+    `const html = document.documentElement.outerHTML; return html.includes("smoke-wrong-pass") || html.includes('value="maskora"');`,
+  );
+  expect(!leaked, "a password appears in the page");
+  ok("E1b: needed and wrong read differently, the right password opens it, none stays in the page", wrong);
+
+  // Failures: not a PDF; a damaged file PDF.js recovers but the native reader cannot.
+  const x1c = await pick("X1c");
+  expect(x1c.state === "failed" && x1c.text.includes("invalidPdf"), JSON.stringify(x1c));
+  ok("a file that is not a PDF fails by name", x1c.text);
+  expect((await pick("X1b")).state === "ready", "X1b did not open");
+  await waitUntil(
+    "X1b native failure",
+    `return document.querySelector('[data-testid="geometry-status"]')?.dataset.status === "failed";`,
+  );
+  const x1b = await app.text(await app.find('[data-testid="geometry-failed"]'));
+  expect(x1b.includes("pageTreeUnreadable"), x1b);
+  const x1bSize = await q(`return document.querySelector('.thumb-size').textContent;`);
+  expect(x1bSize.startsWith("size unknown"), `X1b size should be unknown, not pending: ${x1bSize}`);
+  ok("X1b: PDF.js recovers the page; the native reader's failure is shown, not hidden", x1b);
+  ok("screenshot", await app.screenshot("08-x1b-geometry-failed"));
+
+  // X2a: 500 pages; thumbnails render only as they come into view.
+  expect((await pick("X2a")).state === "ready", "X2a did not open");
+  await waitUntil(
+    "first X2a thumbnail",
+    `return document.querySelector('[data-testid="thumb"][data-index="0"]')?.dataset.state === "rendered";`,
+  );
+  await sleep(1500);
+  const rendered = await q(
+    `return document.querySelectorAll('[data-testid="thumb"][data-state="rendered"]').length;`,
+  );
+  expect(rendered > 0 && rendered < 100, `${rendered} of 500 thumbnails rendered without scrolling`);
+  ok("500 pages: thumbnails render as they come into view", `${rendered} of 500 rendered without scrolling`);
+
+  // The panel: sections collapse, remember it across a reload, and headers stay in view.
+  await q(`document.querySelector('[data-testid="panel"]').scrollTop = 0;`);
+  await app.click(await app.find('[data-testid="section-lighting"]'));
+  await waitUntil(
+    "lighting collapsed",
+    `return document.querySelector('[data-section="lighting"]').dataset.open === "false";`,
+  );
+  await q("location.reload();");
+  await sleep(1500);
+  await app.waitFor('[data-testid="viewport"] canvas');
+  await waitUntil(
+    "remembered after reload",
+    `return document.querySelector('[data-section="lighting"]')?.dataset.open === "false";`,
+  );
+  ok("a collapsed section stays collapsed after a reload");
+  await app.click(await app.find('[data-testid="section-lighting"]'));
+  await waitUntil(
+    "lighting reopened",
+    `return document.querySelector('[data-section="lighting"]').dataset.open === "true";`,
+  );
+  expect((await pick("D1")).state === "ready", "D1 did not reopen");
+  await app.waitFor('[data-testid="box-preview"][data-state="rendered"]');
+  const sticky = await q(`
+    const panel = document.querySelector('[data-testid="panel"]');
+    const section = document.querySelector('[data-section="page"]');
+    panel.scrollTop = section.offsetTop + 150;
+    const header = section.querySelector('.section-header').getBoundingClientRect();
+    return { headerTop: Math.round(header.top - panel.getBoundingClientRect().top), scrolled: panel.scrollTop };`);
+  expect(sticky.scrolled > 0 && Math.abs(sticky.headerTop) <= 1, JSON.stringify(sticky));
+  ok("a section header stays at the top while its section scrolls past", JSON.stringify(sticky));
+  ok("screenshot", await app.screenshot("09-sticky-header"));
+  await q(`document.querySelector('[data-testid="panel"]').scrollTop = 0;`);
 
   // Bypass the UI: call the IPC directly with things the user never selected.
   const refusals = await app.execAsync(`

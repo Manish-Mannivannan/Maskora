@@ -11,7 +11,9 @@
  * what was sampled.
  */
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist/types/src/display/api";
+import { renderPlanned } from "./adapter";
 import { loadPdfjs, openDocument } from "./pdfjs";
+import { asRotation, planRender } from "./transform";
 
 type Region = [number, number, number, number];
 
@@ -67,7 +69,11 @@ async function withDocument<T>(b64: string, fn: (doc: PDFDocumentProxy) => Promi
   }
 }
 
-/** Render `region` (user space) of a page into a canvas sized to that region, via the public API only. */
+/**
+ * Render `region` of a page through the app's transform contract (planRender
+ * + renderPlanned), so the coverage checks test the code the app uses. The
+ * requested scale is in pixels per point; PDF.js-style, UserUnit multiplies it.
+ */
 async function renderRegion(
   doc: PDFDocumentProxy,
   page: PDFPageProxy,
@@ -75,37 +81,29 @@ async function renderRegion(
   scale: number,
   opts: RenderOptions,
 ) {
-  const base = page.getViewport({ scale });
-  const corners = [
-    [region[0], region[1]],
-    [region[0], region[3]],
-    [region[2], region[1]],
-    [region[2], region[3]],
-  ].map(([x, y]) => base.convertToViewportPoint(x, y));
-  const minX = Math.min(...corners.map((p) => p[0]));
-  const minY = Math.min(...corners.map((p) => p[1]));
-  const maxX = Math.max(...corners.map((p) => p[0]));
-  const maxY = Math.max(...corners.map((p) => p[1]));
-  const viewport = page.getViewport({ scale, offsetX: -minX, offsetY: -minY });
+  const rotation = asRotation(page.rotate) ?? 0;
+  const [w, h] =
+    rotation % 180 === 0
+      ? [region[2] - region[0], region[3] - region[1]]
+      : [region[3] - region[1], region[2] - region[0]];
+  const planned = planRender({
+    view: [...page.view] as Region,
+    region,
+    rotation,
+    userUnit: page.userUnit,
+    purpose: "export",
+    longestSidePx: Math.round(Math.max(w, h) * scale * page.userUnit),
+    policy: {
+      background: opts.background === "rgba(0,0,0,0)" ? "transparent" : "paper",
+      annotations: "none",
+    },
+  });
+  if (!planned.ok) throw new Error(planned.message);
   const canvas = document.createElement("canvas");
-  canvas.width = Math.round(maxX - minX);
-  canvas.height = Math.round(maxY - minY);
-  // PDF.js asks for an opaque context when handed a canvas, so a transparent
-  // background needs a context we create with an alpha channel.
-  const transparent = opts.background === "rgba(0,0,0,0)";
   const started = performance.now();
-  await page.render({
-    canvas: transparent ? null : canvas,
-    canvasContext: transparent ? (canvas.getContext("2d", { alpha: true }) ?? undefined) : undefined,
-    viewport,
-    intent: opts.intent ?? "display",
-    annotationMode: opts.annotationMode,
-    background: opts.background,
-    optionalContentConfigPromise: opts.ocIntent
-      ? doc.getOptionalContentConfig({ intent: opts.ocIntent })
-      : undefined,
-  }).promise;
-  return { canvas, ms: performance.now() - started, viewportScale: viewport.scale };
+  const raw = opts.intent || opts.annotationMode !== undefined || opts.ocIntent ? opts : undefined;
+  await renderPlanned(doc, page, planned.plan, canvas, raw ? { raw } : {});
+  return { canvas, ms: performance.now() - started, viewportScale: planned.plan.pxPerUnit };
 }
 
 function sample(canvas: HTMLCanvasElement, points: [number, number][]) {

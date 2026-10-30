@@ -19,6 +19,7 @@
 
 use lopdf::{Dictionary, Document, LoadOptions, Object, ObjectId};
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -57,6 +58,27 @@ pub struct PageGeometry {
     pub user_unit: f64,
     /// In the fixed order MediaBox, CropBox, BleedBox, TrimBox, ArtBox.
     pub boxes: Vec<(String, BoxFact)>,
+}
+
+/// Geometry of every page plus the SHA-256 of the exact bytes parsed, so the
+/// caller can prove both engines saw the same file content.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GeometryReport {
+    /// The reader and its version, recorded as the facts' provenance.
+    pub engine: &'static str,
+    pub sha256: String,
+    pub pages: Vec<PageGeometry>,
+}
+
+/// Kept equal to the locked `lopdf` version by a test.
+pub const ENGINE: &str = "lopdf 0.45.0";
+
+pub fn sha256_hex(bytes: &[u8]) -> String {
+    Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -104,7 +126,10 @@ pub fn inspect(bytes: &[u8], password: Option<&str>) -> Result<Vec<PageGeometry>
         ));
     }
     if pages.is_empty() {
-        return Err(error("noPages", "The document has no pages."));
+        return Err(error(
+            "pageTreeUnreadable",
+            "No pages could be read; the file may be damaged.",
+        ));
     }
     pages
         .values()
@@ -334,19 +359,25 @@ pub async fn inspect_geometry(
     handle: String,
     password: Option<String>,
     registry: tauri::State<'_, crate::sources::SourceRegistry>,
-) -> Result<Vec<PageGeometry>, GeometryError> {
+) -> Result<GeometryReport, GeometryError> {
     let bytes = registry.read(&handle).map_err(|e| GeometryError {
         code: e.code,
         message: e.message,
     })?;
-    tauri::async_runtime::spawn_blocking(move || inspect(&bytes, password.as_deref()))
-        .await
-        .map_err(|_| {
-            error(
-                "inspectionFailed",
-                "Geometry inspection stopped unexpectedly.",
-            )
-        })?
+    tauri::async_runtime::spawn_blocking(move || {
+        inspect(&bytes, password.as_deref()).map(|pages| GeometryReport {
+            engine: ENGINE,
+            sha256: sha256_hex(&bytes),
+            pages,
+        })
+    })
+    .await
+    .map_err(|_| {
+        error(
+            "inspectionFailed",
+            "Geometry inspection stopped unexpectedly.",
+        )
+    })?
 }
 
 #[cfg(test)]
@@ -484,6 +515,66 @@ mod tests {
             let err = inspect(&pdf, None).unwrap_err();
             assert_eq!(err.code, "unreadablePdf", "{id}");
         }
+    }
+
+    #[test]
+    fn d1_mixed_sizes_trim_in_millimetres_and_rotation() {
+        let (pdf, expected) = fixture("D1");
+        let pages = inspect(&pdf, None).unwrap();
+        let want = expected["pages"].as_array().unwrap();
+        assert_eq!(pages.len(), want.len());
+        for (page, want) in pages.iter().zip(want) {
+            let trim = page
+                .boxes
+                .iter()
+                .find(|(n, _)| n == "TrimBox")
+                .unwrap()
+                .1
+                .effective;
+            let mm = |pt: f64| pt * page.user_unit * 25.4 / 72.0;
+            let size = [mm(trim[2] - trim[0]), mm(trim[3] - trim[1])];
+            for (got, want) in size.iter().zip(want["trimSizeMm"].as_array().unwrap()) {
+                assert!(
+                    (got - want.as_f64().unwrap()).abs() < 1e-3,
+                    "page {}: {size:?}",
+                    page.index
+                );
+            }
+            assert_eq!(
+                f64::from(page.rotate.effective.unwrap()),
+                want["rotate"].as_f64().unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn a_damaged_page_tree_is_named_not_reported_as_empty() {
+        // PDF.js rebuilds X1b's broken xref; this reader cannot, and must say so.
+        let (pdf, _) = fixture("X1b");
+        assert_eq!(inspect(&pdf, None).unwrap_err().code, "pageTreeUnreadable");
+    }
+
+    #[test]
+    fn engine_names_the_locked_lopdf_version() {
+        let lock =
+            std::fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("Cargo.lock"))
+                .unwrap();
+        let at = lock.find("name = \"lopdf\"").unwrap();
+        let version = lock[at..]
+            .lines()
+            .nth(1)
+            .unwrap()
+            .trim_start_matches("version = ")
+            .trim_matches('"');
+        assert_eq!(ENGINE, format!("lopdf {version}"));
+    }
+
+    #[test]
+    fn sha256_is_the_standard_digest() {
+        assert_eq!(
+            sha256_hex(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
     }
 
     #[test]

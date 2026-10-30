@@ -114,7 +114,14 @@ export async function openApp({ shotsDir = join(ROOT, "probe-out", "smoke") } = 
     execAsync: (script, ...args) => call("POST", s("/execute/async"), { script, args }),
     find: async (css) => (await call("POST", s("/element"), { using: "css selector", value: css }))[ELEMENT],
     text: (id) => call("GET", s(`/element/${id}/text`)),
-    click: (id) => call("POST", s(`/element/${id}/click`), {}),
+    /** Centre the element first, as a person would; the driver's own scroll can leave it under a sticky header. */
+    click: async (id) => {
+      await call("POST", s("/execute/sync"), {
+        script: "arguments[0].scrollIntoView({ block: 'center', inline: 'nearest' });",
+        args: [{ [ELEMENT]: id }],
+      });
+      return call("POST", s(`/element/${id}/click`), {});
+    },
     clear: (id) => call("POST", s(`/element/${id}/clear`), {}),
     type: (id, text) => call("POST", s(`/element/${id}/value`), { text }),
     attr: (id, name) => call("GET", s(`/element/${id}/attribute/${name}`)),

@@ -44,6 +44,7 @@ check:conventions` fails if a row here disagrees with `package-lock.json`, `src-
 | tauri-build         | 2.7.3   |
 | tauri-plugin-dialog | 2.8.3   |
 | lopdf               | 0.45.0  |
+| sha2                | 0.11.1  |
 | serde               | 1.0.229 |
 | serde_json          | 1.0.154 |
 

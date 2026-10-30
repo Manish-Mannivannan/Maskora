@@ -49,7 +49,18 @@ export interface PageGeometry {
   boxes: [string, BoxFact][];
 }
 
-/** The five page boxes of every page, with provenance, read natively from the page dictionaries. */
-export function inspectGeometry(handle: string, password?: string): Promise<PageGeometry[]> {
-  return invoke<PageGeometry[]>("inspect_geometry", { handle, password: password ?? null });
+export interface GeometryReport {
+  /** The native reader and its version. */
+  engine: string;
+  /** SHA-256 of the exact bytes the native reader parsed. */
+  sha256: string;
+  pages: PageGeometry[];
+}
+
+/**
+ * The five page boxes of every page, with provenance, read natively from the
+ * page dictionaries. The password is used for this call only.
+ */
+export function inspectGeometry(handle: string, password?: string): Promise<GeometryReport> {
+  return invoke<GeometryReport>("inspect_geometry", { handle, password: password ?? null });
 }

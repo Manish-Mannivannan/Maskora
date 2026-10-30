@@ -26,7 +26,7 @@ const fill = ([x, y, w, h], [r, g, b]) => `${r} ${g} ${b} rg ${x} ${y} ${w} ${h}
  * A document from page specs. `prepare(pdf)` may add shared objects first and
  * returns a context passed to function-valued page dicts and catalog extras.
  */
-function makeDoc({ pages, pagesNode = {}, catalog = {}, version = "1.7", prepare, encryption }) {
+function makeDoc({ pages, pagesNode = {}, catalog = {}, version = "1.7", prepare, encryption, info }) {
   const pdf = new PdfBuilder({ version });
   const catalogId = pdf.reserve();
   const pagesId = pdf.reserve();
@@ -42,7 +42,10 @@ function makeDoc({ pages, pagesNode = {}, catalog = {}, version = "1.7", prepare
     Pages: ref(pagesId),
     ...(typeof catalog === "function" ? catalog(ctx) : catalog),
   });
-  if (!encryption) return pdf.build({ root: catalogId, id: FILE_ID });
+  if (!encryption) {
+    const trailer = info ? { Info: ref(pdf.add(info)) } : {};
+    return pdf.build({ root: catalogId, id: FILE_ID, trailer });
+  }
   const sec = standardSecurity({ ...encryption, idHex: FILE_ID });
   const encryptId = pdf.add({
     Filter: name("Standard"),
@@ -611,6 +614,98 @@ const E1b = () => ({
   },
 });
 
+// ---------------------------------------------------------------------------
+// Document information (step 1.1)
+// ---------------------------------------------------------------------------
+
+/** An asymmetric "F" plus one dot per page index, so orientation and order are visible. */
+const markF = ([x0, y0, x1, y1], index) => {
+  const w = x1 - x0;
+  const h = y1 - y0;
+  const u = Math.min(w, h) / 10;
+  const left = x0 + 1.5 * u;
+  const top = y1 - 1.5 * u;
+  return (
+    fill([left, top - 6 * u, u, 6 * u], [0.1, 0.1, 0.1]) +
+    fill([left, top - u, 4 * u, u], [0.1, 0.1, 0.1]) +
+    fill([left, top - 3.5 * u, 2.5 * u, u], [0.1, 0.1, 0.1]) +
+    Array.from({ length: index + 1 }, (_, i) =>
+      fill([x1 - 2 * u, y0 + u + i * 1.2 * u, 0.8 * u, 0.8 * u], [0.85, 0.2, 0.2]),
+    ).join("")
+  );
+};
+
+const XMP = `<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+<rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/">
+<dc:title><rdf:Alt><rdf:li xml:lang="x-default">Maskora mixed document</rdf:li></rdf:Alt></dc:title>
+</rdf:Description></rdf:RDF></x:xmpmeta>
+<?xpacket end="w"?>`;
+
+const D1 = () => {
+  const specs = [
+    { media: [0, 0, 595.2756, 841.8898], label: "i", mm: [210, 297] },
+    { media: [0, 0, 841.8898, 595.2756], label: "ii", mm: [297, 210] },
+    { media: [0, 0, 419.5276, 595.2756], label: "1", mm: [148, 210] },
+    { media: [0, 0, 612, 792], label: "2", mm: [215.9, 279.4], rotate: 90 },
+    {
+      media: [0, 0, 300, 300],
+      bleed: [9, 9, 291, 291],
+      trim: [17.5039, 17.5039, 282.4961, 282.4961],
+      label: "A-1",
+      mm: [93.4834, 93.4834],
+    },
+  ];
+  return {
+    pdf: makeDoc({
+      prepare: (pdf) => ({
+        metadata: pdf.add(stream({ Type: name("Metadata"), Subtype: name("XML") }, XMP)),
+      }),
+      catalog: ({ metadata }) => ({
+        Metadata: ref(metadata),
+        PageLabels: {
+          Nums: [0, { S: name("r") }, 2, { S: name("D") }, 4, { S: name("D"), P: str("A-") }],
+        },
+      }),
+      info: {
+        Title: str("Maskora mixed document"),
+        Author: str("Maskora fixtures"),
+        Subject: str("Mixed sizes and page labels"),
+        Creator: str("Maskora fixture generator"),
+        Producer: str("Maskora pdf-writer"),
+        CreationDate: str("D:20261030120000Z"),
+        ModDate: str("D:20261030123000Z"),
+      },
+      pages: specs.map((p, i) => ({
+        dict: {
+          MediaBox: p.media,
+          ...(p.bleed ? { BleedBox: p.bleed } : {}),
+          ...(p.trim ? { TrimBox: p.trim } : {}),
+          ...(p.rotate ? { Rotate: p.rotate } : {}),
+        },
+        content: markF(p.trim ?? p.media, i),
+      })),
+    }),
+    expected: {
+      description:
+        "Mixed sizes, orientations and page labels (roman i–ii, decimal 1–2, prefixed A-1), Info dictionary and XMP; physical size is the effective TrimBox in mm",
+      labels: specs.map((p) => p.label),
+      pages: specs.map((p, index) => ({ index, rotate: p.rotate ?? 0, trimSizeMm: p.mm })),
+      info: {
+        Title: "Maskora mixed document",
+        Author: "Maskora fixtures",
+        Subject: "Mixed sizes and page labels",
+        Creator: "Maskora fixture generator",
+        Producer: "Maskora pdf-writer",
+        CreationDate: "2026-10-30T12:00:00.000Z",
+        ModDate: "2026-10-30T12:30:00.000Z",
+      },
+      pdfVersion: "1.7",
+      xmp: true,
+    },
+  };
+};
+
 export const CORPUS = {
   G3,
   G4,
@@ -633,4 +728,5 @@ export const CORPUS = {
   X2c,
   E1a,
   E1b,
+  D1,
 };

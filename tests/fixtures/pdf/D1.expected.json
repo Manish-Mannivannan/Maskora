@@ -1,0 +1,64 @@
+{
+  "fixture": "D1",
+  "description": "Mixed sizes, orientations and page labels (roman i–ii, decimal 1–2, prefixed A-1), Info dictionary and XMP; physical size is the effective TrimBox in mm",
+  "labels": [
+    "i",
+    "ii",
+    "1",
+    "2",
+    "A-1"
+  ],
+  "pages": [
+    {
+      "index": 0,
+      "rotate": 0,
+      "trimSizeMm": [
+        210,
+        297
+      ]
+    },
+    {
+      "index": 1,
+      "rotate": 0,
+      "trimSizeMm": [
+        297,
+        210
+      ]
+    },
+    {
+      "index": 2,
+      "rotate": 0,
+      "trimSizeMm": [
+        148,
+        210
+      ]
+    },
+    {
+      "index": 3,
+      "rotate": 90,
+      "trimSizeMm": [
+        215.9,
+        279.4
+      ]
+    },
+    {
+      "index": 4,
+      "rotate": 0,
+      "trimSizeMm": [
+        93.4834,
+        93.4834
+      ]
+    }
+  ],
+  "info": {
+    "Title": "Maskora mixed document",
+    "Author": "Maskora fixtures",
+    "Subject": "Mixed sizes and page labels",
+    "Creator": "Maskora fixture generator",
+    "Producer": "Maskora pdf-writer",
+    "CreationDate": "2026-10-30T12:00:00.000Z",
+    "ModDate": "2026-10-30T12:30:00.000Z"
+  },
+  "pdfVersion": "1.7",
+  "xmp": true
+}
