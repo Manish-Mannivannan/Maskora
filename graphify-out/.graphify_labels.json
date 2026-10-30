@@ -15,7 +15,7 @@
   "13": "main.rs",
   "14": "maskora",
   "15": "check-versions.mjs",
-  "16": "webdriver.mjs",
+  "16": "smoke.mjs",
   "17": "dependencies",
   "18": "prefix-graphify-vault.mjs",
   "19": "check-secrets.mjs",
@@ -26,7 +26,12 @@
   "24": "pre-push",
   "25": "next.config.ts",
   "26": "setup.mjs",
-  "27": "page.tsx",
+  "27": "Workspace.tsx",
   "28": "eslint.config.mjs",
-  "29": "vitest.config.ts"
+  "29": "vitest.config.ts",
+  "30": "sources.rs",
+  "31": "csp",
+  "32": "copy-pdfjs.mjs",
+  "33": "pdfjs-dist",
+  "34": "dialog.ps1"
 }

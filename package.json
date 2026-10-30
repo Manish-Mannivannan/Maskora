@@ -9,7 +9,9 @@
   "scripts": {
     "prepare": "git config core.hooksPath .githooks",
     "setup": "npm ci && node scripts/setup.mjs",
+    "predev": "node scripts/copy-pdfjs.mjs",
     "dev": "next dev --port 3000",
+    "prebuild": "node scripts/copy-pdfjs.mjs",
     "build": "next build",
     "tauri": "tauri",
     "lint": "eslint .",

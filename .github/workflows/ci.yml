@@ -1,0 +1,50 @@
+# The root check and an embedded-frontend build on Windows, the only verified
+# platform. Synthetic fixtures only; no secrets are needed or available.
+# The native smoke (`npm run smoke`) is not run here: it needs a desktop
+# session and an msedgedriver matched to the runner's WebView2.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-and-build:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version-file: package.json
+          cache: npm
+
+      # rustup reads rust-toolchain.toml and installs the pinned toolchain.
+      - name: Rust toolchain
+        run: rustup show active-toolchain
+
+      - uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'src-tauri/Cargo.lock') }}
+
+      - name: Install
+        run: npm ci
+
+      - name: Root check
+        run: npm run check
+
+      - name: Build with the embedded static export
+        run: npx tauri build --debug --no-bundle
