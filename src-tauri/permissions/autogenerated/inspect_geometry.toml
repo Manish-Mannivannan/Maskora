@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-inspect-geometry"
+description = "Enables the inspect_geometry command without any pre-configured scope."
+commands.allow = ["inspect_geometry"]
+
+[[permission]]
+identifier = "deny-inspect-geometry"
+description = "Denies the inspect_geometry command without any pre-configured scope."
+commands.deny = ["inspect_geometry"]

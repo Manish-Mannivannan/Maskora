@@ -55,6 +55,12 @@ export default function Workspace() {
     return () => document.removeEventListener("securitypolicyviolation", record);
   }, []);
 
+  // The Phase 0.4 compatibility probe exists only in builds made with
+  // NEXT_PUBLIC_MASKORA_PROBE=1; the constant is inlined, so normal builds drop it.
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_MASKORA_PROBE === "1") void import("@/pdf/probe").then((m) => m.install());
+  }, []);
+
   const openPdf = useCallback(async () => {
     setDoc({ kind: "selecting" });
     try {

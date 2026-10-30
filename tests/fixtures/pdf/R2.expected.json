@@ -1,0 +1,726 @@
+{
+  "fixture": "R2",
+  "description": "R1 under Rotate 90/180/270, with a shifted origin (+1000, -500), and with UserUnit 2",
+  "pages": [
+    {
+      "index": 0,
+      "rotate": 90,
+      "userUnit": 1,
+      "boxes": {
+        "MediaBox": [
+          0,
+          0,
+          300,
+          400
+        ],
+        "CropBox": [
+          18,
+          22,
+          284,
+          386
+        ],
+        "BleedBox": [
+          30,
+          34,
+          272,
+          374
+        ],
+        "TrimBox": [
+          40,
+          46,
+          262,
+          362
+        ]
+      },
+      "marks": [
+        {
+          "id": "mediaMarginLeft",
+          "rect": [
+            5,
+            200,
+            8,
+            8
+          ],
+          "color": [
+            1,
+            0,
+            0
+          ],
+          "in": [
+            "MediaBox"
+          ]
+        },
+        {
+          "id": "mediaMarginBottom",
+          "rect": [
+            150,
+            5,
+            8,
+            8
+          ],
+          "color": [
+            1,
+            0,
+            0
+          ],
+          "in": [
+            "MediaBox"
+          ]
+        },
+        {
+          "id": "cropBleedBand",
+          "rect": [
+            20,
+            200,
+            8,
+            8
+          ],
+          "color": [
+            0,
+            0.8,
+            0
+          ],
+          "in": [
+            "MediaBox",
+            "CropBox"
+          ]
+        },
+        {
+          "id": "bleedTrimBand",
+          "rect": [
+            31,
+            200,
+            8,
+            8
+          ],
+          "color": [
+            0,
+            0,
+            1
+          ],
+          "in": [
+            "MediaBox",
+            "CropBox",
+            "BleedBox"
+          ]
+        },
+        {
+          "id": "trimInterior",
+          "rect": [
+            100,
+            100,
+            40,
+            60
+          ],
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "in": [
+            "MediaBox",
+            "CropBox",
+            "BleedBox",
+            "TrimBox"
+          ]
+        },
+        {
+          "id": "trimUpperRight",
+          "rect": [
+            240,
+            340,
+            12,
+            12
+          ],
+          "color": [
+            1,
+            0,
+            1
+          ],
+          "in": [
+            "MediaBox",
+            "CropBox",
+            "BleedBox",
+            "TrimBox"
+          ]
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "rotate": 180,
+      "userUnit": 1,
+      "boxes": {
+        "MediaBox": [
+          0,
+          0,
+          300,
+          400
+        ],
+        "CropBox": [
+          18,
+          22,
+          284,
+          386
+        ],
+        "BleedBox": [
+          30,
+          34,
+          272,
+          374
+        ],
+        "TrimBox": [
+          40,
+          46,
+          262,
+          362
+        ]
+      },
+      "marks": [
+        {
+          "id": "mediaMarginLeft",
+          "rect": [
+            5,
+            200,
+            8,
+            8
+          ],
+          "color": [
+            1,
+            0,
+            0
+          ],
+          "in": [
+            "MediaBox"
+          ]
+        },
+        {
+          "id": "mediaMarginBottom",
+          "rect": [
+            150,
+            5,
+            8,
+            8
+          ],
+          "color": [
+            1,
+            0,
+            0
+          ],
+          "in": [
+            "MediaBox"
+          ]
+        },
+        {
+          "id": "cropBleedBand",
+          "rect": [
+            20,
+            200,
+            8,
+            8
+          ],
+          "color": [
+            0,
+            0.8,
+            0
+          ],
+          "in": [
+            "MediaBox",
+            "CropBox"
+          ]
+        },
+        {
+          "id": "bleedTrimBand",
+          "rect": [
+            31,
+            200,
+            8,
+            8
+          ],
+          "color": [
+            0,
+            0,
+            1
+          ],
+          "in": [
+            "MediaBox",
+            "CropBox",
+            "BleedBox"
+          ]
+        },
+        {
+          "id": "trimInterior",
+          "rect": [
+            100,
+            100,
+            40,
+            60
+          ],
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "in": [
+            "MediaBox",
+            "CropBox",
+            "BleedBox",
+            "TrimBox"
+          ]
+        },
+        {
+          "id": "trimUpperRight",
+          "rect": [
+            240,
+            340,
+            12,
+            12
+          ],
+          "color": [
+            1,
+            0,
+            1
+          ],
+          "in": [
+            "MediaBox",
+            "CropBox",
+            "BleedBox",
+            "TrimBox"
+          ]
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "rotate": 270,
+      "userUnit": 1,
+      "boxes": {
+        "MediaBox": [
+          0,
+          0,
+          300,
+          400
+        ],
+        "CropBox": [
+          18,
+          22,
+          284,
+          386
+        ],
+        "BleedBox": [
+          30,
+          34,
+          272,
+          374
+        ],
+        "TrimBox": [
+          40,
+          46,
+          262,
+          362
+        ]
+      },
+      "marks": [
+        {
+          "id": "mediaMarginLeft",
+          "rect": [
+            5,
+            200,
+            8,
+            8
+          ],
+          "color": [
+            1,
+            0,
+            0
+          ],
+          "in": [
+            "MediaBox"
+          ]
+        },
+        {
+          "id": "mediaMarginBottom",
+          "rect": [
+            150,
+            5,
+            8,
+            8
+          ],
+          "color": [
+            1,
+            0,
+            0
+          ],
+          "in": [
+            "MediaBox"
+          ]
+        },
+        {
+          "id": "cropBleedBand",
+          "rect": [
+            20,
+            200,
+            8,
+            8
+          ],
+          "color": [
+            0,
+            0.8,
+            0
+          ],
+          "in": [
+            "MediaBox",
+            "CropBox"
+          ]
+        },
+        {
+          "id": "bleedTrimBand",
+          "rect": [
+            31,
+            200,
+            8,
+            8
+          ],
+          "color": [
+            0,
+            0,
+            1
+          ],
+          "in": [
+            "MediaBox",
+            "CropBox",
+            "BleedBox"
+          ]
+        },
+        {
+          "id": "trimInterior",
+          "rect": [
+            100,
+            100,
+            40,
+            60
+          ],
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "in": [
+            "MediaBox",
+            "CropBox",
+            "BleedBox",
+            "TrimBox"
+          ]
+        },
+        {
+          "id": "trimUpperRight",
+          "rect": [
+            240,
+            340,
+            12,
+            12
+          ],
+          "color": [
+            1,
+            0,
+            1
+          ],
+          "in": [
+            "MediaBox",
+            "CropBox",
+            "BleedBox",
+            "TrimBox"
+          ]
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "rotate": 0,
+      "userUnit": 1,
+      "boxes": {
+        "MediaBox": [
+          1000,
+          -500,
+          1300,
+          -100
+        ],
+        "CropBox": [
+          1018,
+          -478,
+          1284,
+          -114
+        ],
+        "BleedBox": [
+          1030,
+          -466,
+          1272,
+          -126
+        ],
+        "TrimBox": [
+          1040,
+          -454,
+          1262,
+          -138
+        ]
+      },
+      "marks": [
+        {
+          "id": "mediaMarginLeft",
+          "rect": [
+            1005,
+            -300,
+            8,
+            8
+          ],
+          "color": [
+            1,
+            0,
+            0
+          ],
+          "in": [
+            "MediaBox"
+          ]
+        },
+        {
+          "id": "mediaMarginBottom",
+          "rect": [
+            1150,
+            -495,
+            8,
+            8
+          ],
+          "color": [
+            1,
+            0,
+            0
+          ],
+          "in": [
+            "MediaBox"
+          ]
+        },
+        {
+          "id": "cropBleedBand",
+          "rect": [
+            1020,
+            -300,
+            8,
+            8
+          ],
+          "color": [
+            0,
+            0.8,
+            0
+          ],
+          "in": [
+            "MediaBox",
+            "CropBox"
+          ]
+        },
+        {
+          "id": "bleedTrimBand",
+          "rect": [
+            1031,
+            -300,
+            8,
+            8
+          ],
+          "color": [
+            0,
+            0,
+            1
+          ],
+          "in": [
+            "MediaBox",
+            "CropBox",
+            "BleedBox"
+          ]
+        },
+        {
+          "id": "trimInterior",
+          "rect": [
+            1100,
+            -400,
+            40,
+            60
+          ],
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "in": [
+            "MediaBox",
+            "CropBox",
+            "BleedBox",
+            "TrimBox"
+          ]
+        },
+        {
+          "id": "trimUpperRight",
+          "rect": [
+            1240,
+            -160,
+            12,
+            12
+          ],
+          "color": [
+            1,
+            0,
+            1
+          ],
+          "in": [
+            "MediaBox",
+            "CropBox",
+            "BleedBox",
+            "TrimBox"
+          ]
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "rotate": 0,
+      "userUnit": 2,
+      "boxes": {
+        "MediaBox": [
+          0,
+          0,
+          300,
+          400
+        ],
+        "CropBox": [
+          18,
+          22,
+          284,
+          386
+        ],
+        "BleedBox": [
+          30,
+          34,
+          272,
+          374
+        ],
+        "TrimBox": [
+          40,
+          46,
+          262,
+          362
+        ]
+      },
+      "marks": [
+        {
+          "id": "mediaMarginLeft",
+          "rect": [
+            5,
+            200,
+            8,
+            8
+          ],
+          "color": [
+            1,
+            0,
+            0
+          ],
+          "in": [
+            "MediaBox"
+          ]
+        },
+        {
+          "id": "mediaMarginBottom",
+          "rect": [
+            150,
+            5,
+            8,
+            8
+          ],
+          "color": [
+            1,
+            0,
+            0
+          ],
+          "in": [
+            "MediaBox"
+          ]
+        },
+        {
+          "id": "cropBleedBand",
+          "rect": [
+            20,
+            200,
+            8,
+            8
+          ],
+          "color": [
+            0,
+            0.8,
+            0
+          ],
+          "in": [
+            "MediaBox",
+            "CropBox"
+          ]
+        },
+        {
+          "id": "bleedTrimBand",
+          "rect": [
+            31,
+            200,
+            8,
+            8
+          ],
+          "color": [
+            0,
+            0,
+            1
+          ],
+          "in": [
+            "MediaBox",
+            "CropBox",
+            "BleedBox"
+          ]
+        },
+        {
+          "id": "trimInterior",
+          "rect": [
+            100,
+            100,
+            40,
+            60
+          ],
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "in": [
+            "MediaBox",
+            "CropBox",
+            "BleedBox",
+            "TrimBox"
+          ]
+        },
+        {
+          "id": "trimUpperRight",
+          "rect": [
+            240,
+            340,
+            12,
+            12
+          ],
+          "color": [
+            1,
+            0,
+            1
+          ],
+          "in": [
+            "MediaBox",
+            "CropBox",
+            "BleedBox",
+            "TrimBox"
+          ]
+        }
+      ]
+    }
+  ]
+}

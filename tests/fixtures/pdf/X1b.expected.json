@@ -1,0 +1,5 @@
+{
+  "fixture": "X1b",
+  "description": "Every xref offset wrong: a reader must rebuild the table or fail by name",
+  "outcome": "named failure or explicit recovery; never a hang"
+}

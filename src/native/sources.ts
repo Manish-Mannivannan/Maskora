@@ -32,3 +32,24 @@ export async function readSource(handle: string): Promise<Uint8Array> {
   const data = await invoke<ArrayBuffer>("read_source", { handle });
   return new Uint8Array(data);
 }
+
+export type FactOrigin = "explicit" | "inherited" | "default" | "invalid";
+
+export interface BoxFact {
+  raw: number[] | null;
+  effective: [number, number, number, number];
+  origin: FactOrigin;
+  adjustments?: ("normalized" | "clipped")[];
+}
+
+export interface PageGeometry {
+  index: number;
+  rotate: { raw: number | null; effective: number | null; origin: FactOrigin };
+  userUnit: number;
+  boxes: [string, BoxFact][];
+}
+
+/** The five page boxes of every page, with provenance, read natively from the page dictionaries. */
+export function inspectGeometry(handle: string, password?: string): Promise<PageGeometry[]> {
+  return invoke<PageGeometry[]>("inspect_geometry", { handle, password: password ?? null });
+}

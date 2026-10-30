@@ -1,0 +1,6 @@
+{
+  "fixture": "E1a",
+  "description": "RC4-128 (R3) with an owner password only: opens without a password; permissions are reported, not enforced",
+  "needsPassword": false,
+  "permissions": -3904
+}

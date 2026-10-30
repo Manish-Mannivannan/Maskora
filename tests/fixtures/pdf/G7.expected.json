@@ -1,0 +1,204 @@
+{
+  "fixture": "G7",
+  "description": "Mixed page sizes in one file: A4 portrait, A5 landscape, US Letter",
+  "pages": [
+    {
+      "index": 0,
+      "rotate": {
+        "raw": null,
+        "effective": 0,
+        "origin": "default"
+      },
+      "userUnit": 1,
+      "boxes": {
+        "MediaBox": {
+          "raw": [
+            0,
+            0,
+            595.2756,
+            841.8898
+          ],
+          "effective": [
+            0,
+            0,
+            595.2756,
+            841.8898
+          ],
+          "origin": "explicit"
+        },
+        "CropBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            595.2756,
+            841.8898
+          ],
+          "origin": "default"
+        },
+        "BleedBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            595.2756,
+            841.8898
+          ],
+          "origin": "default"
+        },
+        "TrimBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            595.2756,
+            841.8898
+          ],
+          "origin": "default"
+        },
+        "ArtBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            595.2756,
+            841.8898
+          ],
+          "origin": "default"
+        }
+      }
+    },
+    {
+      "index": 1,
+      "rotate": {
+        "raw": null,
+        "effective": 0,
+        "origin": "default"
+      },
+      "userUnit": 1,
+      "boxes": {
+        "MediaBox": {
+          "raw": [
+            0,
+            0,
+            595.2756,
+            419.5276
+          ],
+          "effective": [
+            0,
+            0,
+            595.2756,
+            419.5276
+          ],
+          "origin": "explicit"
+        },
+        "CropBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            595.2756,
+            419.5276
+          ],
+          "origin": "default"
+        },
+        "BleedBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            595.2756,
+            419.5276
+          ],
+          "origin": "default"
+        },
+        "TrimBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            595.2756,
+            419.5276
+          ],
+          "origin": "default"
+        },
+        "ArtBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            595.2756,
+            419.5276
+          ],
+          "origin": "default"
+        }
+      }
+    },
+    {
+      "index": 2,
+      "rotate": {
+        "raw": null,
+        "effective": 0,
+        "origin": "default"
+      },
+      "userUnit": 1,
+      "boxes": {
+        "MediaBox": {
+          "raw": [
+            0,
+            0,
+            612,
+            792
+          ],
+          "effective": [
+            0,
+            0,
+            612,
+            792
+          ],
+          "origin": "explicit"
+        },
+        "CropBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            612,
+            792
+          ],
+          "origin": "default"
+        },
+        "BleedBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            612,
+            792
+          ],
+          "origin": "default"
+        },
+        "TrimBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            612,
+            792
+          ],
+          "origin": "default"
+        },
+        "ArtBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            612,
+            792
+          ],
+          "origin": "default"
+        }
+      }
+    }
+  ]
+}

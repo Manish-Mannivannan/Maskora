@@ -1,0 +1,6 @@
+{
+  "fixture": "E1b",
+  "description": "RC4-128 (R3) with user password 'maskora': refuses without it, refuses a wrong one, opens with it",
+  "needsPassword": true,
+  "userPassword": "maskora"
+}

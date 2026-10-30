@@ -1,0 +1,153 @@
+{
+  "fixture": "G3",
+  "description": "MediaBox, CropBox and Rotate inherited from the Pages node; an illegal TrimBox on the Pages node is ignored",
+  "pages": [
+    {
+      "index": 0,
+      "rotate": {
+        "raw": 90,
+        "effective": 90,
+        "origin": "inherited"
+      },
+      "userUnit": 1,
+      "boxes": {
+        "MediaBox": {
+          "raw": [
+            0,
+            0,
+            500,
+            700
+          ],
+          "effective": [
+            0,
+            0,
+            500,
+            700
+          ],
+          "origin": "inherited"
+        },
+        "CropBox": {
+          "raw": [
+            5,
+            5,
+            495,
+            695
+          ],
+          "effective": [
+            5,
+            5,
+            495,
+            695
+          ],
+          "origin": "inherited"
+        },
+        "BleedBox": {
+          "raw": null,
+          "effective": [
+            5,
+            5,
+            495,
+            695
+          ],
+          "origin": "default"
+        },
+        "TrimBox": {
+          "raw": null,
+          "effective": [
+            5,
+            5,
+            495,
+            695
+          ],
+          "origin": "default"
+        },
+        "ArtBox": {
+          "raw": null,
+          "effective": [
+            5,
+            5,
+            495,
+            695
+          ],
+          "origin": "default"
+        }
+      }
+    },
+    {
+      "index": 1,
+      "rotate": {
+        "raw": 90,
+        "effective": 90,
+        "origin": "inherited"
+      },
+      "userUnit": 1,
+      "boxes": {
+        "MediaBox": {
+          "raw": [
+            0,
+            0,
+            500,
+            700
+          ],
+          "effective": [
+            0,
+            0,
+            500,
+            700
+          ],
+          "origin": "inherited"
+        },
+        "CropBox": {
+          "raw": [
+            10,
+            20,
+            480,
+            690
+          ],
+          "effective": [
+            10,
+            20,
+            480,
+            690
+          ],
+          "origin": "explicit"
+        },
+        "BleedBox": {
+          "raw": null,
+          "effective": [
+            10,
+            20,
+            480,
+            690
+          ],
+          "origin": "default"
+        },
+        "TrimBox": {
+          "raw": [
+            30,
+            40,
+            470,
+            660
+          ],
+          "effective": [
+            30,
+            40,
+            470,
+            660
+          ],
+          "origin": "explicit"
+        },
+        "ArtBox": {
+          "raw": null,
+          "effective": [
+            10,
+            20,
+            480,
+            690
+          ],
+          "origin": "default"
+        }
+      }
+    }
+  ]
+}

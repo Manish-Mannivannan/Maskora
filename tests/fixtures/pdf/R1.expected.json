@@ -1,0 +1,150 @@
+{
+  "fixture": "R1",
+  "description": "Coloured marks in each band between MediaBox, CropBox, BleedBox and TrimBox; each region's render contains exactly the marks listed for it",
+  "pages": [
+    {
+      "index": 0,
+      "rotate": 0,
+      "userUnit": 1,
+      "boxes": {
+        "MediaBox": [
+          0,
+          0,
+          300,
+          400
+        ],
+        "CropBox": [
+          18,
+          22,
+          284,
+          386
+        ],
+        "BleedBox": [
+          30,
+          34,
+          272,
+          374
+        ],
+        "TrimBox": [
+          40,
+          46,
+          262,
+          362
+        ]
+      },
+      "marks": [
+        {
+          "id": "mediaMarginLeft",
+          "rect": [
+            5,
+            200,
+            8,
+            8
+          ],
+          "color": [
+            1,
+            0,
+            0
+          ],
+          "in": [
+            "MediaBox"
+          ]
+        },
+        {
+          "id": "mediaMarginBottom",
+          "rect": [
+            150,
+            5,
+            8,
+            8
+          ],
+          "color": [
+            1,
+            0,
+            0
+          ],
+          "in": [
+            "MediaBox"
+          ]
+        },
+        {
+          "id": "cropBleedBand",
+          "rect": [
+            20,
+            200,
+            8,
+            8
+          ],
+          "color": [
+            0,
+            0.8,
+            0
+          ],
+          "in": [
+            "MediaBox",
+            "CropBox"
+          ]
+        },
+        {
+          "id": "bleedTrimBand",
+          "rect": [
+            31,
+            200,
+            8,
+            8
+          ],
+          "color": [
+            0,
+            0,
+            1
+          ],
+          "in": [
+            "MediaBox",
+            "CropBox",
+            "BleedBox"
+          ]
+        },
+        {
+          "id": "trimInterior",
+          "rect": [
+            100,
+            100,
+            40,
+            60
+          ],
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "in": [
+            "MediaBox",
+            "CropBox",
+            "BleedBox",
+            "TrimBox"
+          ]
+        },
+        {
+          "id": "trimUpperRight",
+          "rect": [
+            240,
+            340,
+            12,
+            12
+          ],
+          "color": [
+            1,
+            0,
+            1
+          ],
+          "in": [
+            "MediaBox",
+            "CropBox",
+            "BleedBox",
+            "TrimBox"
+          ]
+        }
+      ]
+    }
+  ]
+}

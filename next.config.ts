@@ -10,6 +10,9 @@ const nextConfig: NextConfig = {
   // Tauri serves the export from its own origin; keep asset URLs relative to it.
   trailingSlash: false,
   devIndicators: false,
+  // Always defined so it is inlined as a constant and the probe branch is
+  // dropped from normal builds, not merely skipped at run time.
+  env: { NEXT_PUBLIC_MASKORA_PROBE: process.env.NEXT_PUBLIC_MASKORA_PROBE === "1" ? "1" : "0" },
 };
 
 export default nextConfig;

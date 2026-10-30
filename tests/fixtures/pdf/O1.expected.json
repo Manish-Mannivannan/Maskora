@@ -1,0 +1,47 @@
+{
+  "fixture": "O1",
+  "description": "Optional content: 'ViewOnly' (green) is on for viewing and off for print; 'PrintOnly' (red) the reverse, through /AS usage",
+  "pages": [
+    {
+      "index": 0,
+      "boxes": {
+        "MediaBox": [
+          0,
+          0,
+          200,
+          100
+        ]
+      },
+      "groups": [
+        {
+          "id": "ViewOnly",
+          "at": [
+            50,
+            50
+          ],
+          "color": [
+            0,
+            0.8,
+            0
+          ],
+          "view": true,
+          "print": false
+        },
+        {
+          "id": "PrintOnly",
+          "at": [
+            150,
+            50
+          ],
+          "color": [
+            1,
+            0,
+            0
+          ],
+          "view": false,
+          "print": true
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,148 @@
+{
+  "fixture": "G4",
+  "description": "Negative and large positive MediaBox origins; user-space rectangles are preserved",
+  "pages": [
+    {
+      "index": 0,
+      "rotate": {
+        "raw": null,
+        "effective": 0,
+        "origin": "default"
+      },
+      "userUnit": 1,
+      "boxes": {
+        "MediaBox": {
+          "raw": [
+            -300,
+            -400,
+            300,
+            400
+          ],
+          "effective": [
+            -300,
+            -400,
+            300,
+            400
+          ],
+          "origin": "explicit"
+        },
+        "CropBox": {
+          "raw": [
+            -290,
+            -395,
+            295,
+            390
+          ],
+          "effective": [
+            -290,
+            -395,
+            295,
+            390
+          ],
+          "origin": "explicit"
+        },
+        "BleedBox": {
+          "raw": null,
+          "effective": [
+            -290,
+            -395,
+            295,
+            390
+          ],
+          "origin": "default"
+        },
+        "TrimBox": {
+          "raw": [
+            -280,
+            -380,
+            280,
+            380
+          ],
+          "effective": [
+            -280,
+            -380,
+            280,
+            380
+          ],
+          "origin": "explicit"
+        },
+        "ArtBox": {
+          "raw": null,
+          "effective": [
+            -290,
+            -395,
+            295,
+            390
+          ],
+          "origin": "default"
+        }
+      }
+    },
+    {
+      "index": 1,
+      "rotate": {
+        "raw": null,
+        "effective": 0,
+        "origin": "default"
+      },
+      "userUnit": 1,
+      "boxes": {
+        "MediaBox": {
+          "raw": [
+            1000,
+            2000,
+            1595,
+            2842
+          ],
+          "effective": [
+            1000,
+            2000,
+            1595,
+            2842
+          ],
+          "origin": "explicit"
+        },
+        "CropBox": {
+          "raw": null,
+          "effective": [
+            1000,
+            2000,
+            1595,
+            2842
+          ],
+          "origin": "default"
+        },
+        "BleedBox": {
+          "raw": null,
+          "effective": [
+            1000,
+            2000,
+            1595,
+            2842
+          ],
+          "origin": "default"
+        },
+        "TrimBox": {
+          "raw": null,
+          "effective": [
+            1000,
+            2000,
+            1595,
+            2842
+          ],
+          "origin": "default"
+        },
+        "ArtBox": {
+          "raw": null,
+          "effective": [
+            1000,
+            2000,
+            1595,
+            2842
+          ],
+          "origin": "default"
+        }
+      }
+    }
+  ]
+}

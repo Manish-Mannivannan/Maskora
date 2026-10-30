@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The main window may select a source through the native dialog and read sources it was handed; nothing else.",
+  "description": "The main window may select a source through the native dialog and read and inspect sources it was handed; nothing else.",
   "windows": ["main"],
-  "permissions": ["allow-select-source", "allow-read-source"]
+  "permissions": ["allow-select-source", "allow-read-source", "allow-inspect-geometry"]
 }

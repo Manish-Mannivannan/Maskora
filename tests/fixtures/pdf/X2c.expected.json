@@ -1,0 +1,8 @@
+{
+  "fixture": "X2c",
+  "description": "A 4000 × 4000 8-bit grey image on a 600 pt page (≈ 480 ppi)",
+  "imagePixels": [
+    4000,
+    4000
+  ]
+}

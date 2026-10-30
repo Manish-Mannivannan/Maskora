@@ -23,9 +23,10 @@ export function loadPdfjs(): Promise<typeof import("pdfjs-dist")> {
 }
 
 /** Parameters every document is opened with: local resources only, no scripting. */
-export function localDocumentParams(data: Uint8Array): DocumentInitParameters {
+export function localDocumentParams(data: Uint8Array, password?: string): DocumentInitParameters {
   return {
     data,
+    password,
     cMapUrl: `${BASE}cmaps/`,
     cMapPacked: true,
     standardFontDataUrl: `${BASE}standard_fonts/`,
@@ -42,9 +43,9 @@ export interface OpenedDocument {
   close: () => Promise<void>;
 }
 
-export async function openDocument(data: Uint8Array): Promise<OpenedDocument> {
+export async function openDocument(data: Uint8Array, password?: string): Promise<OpenedDocument> {
   const pdfjs = await loadPdfjs();
-  const task = pdfjs.getDocument(localDocumentParams(data));
+  const task = pdfjs.getDocument(localDocumentParams(data, password));
   const document = await task.promise;
   return { document, close: () => task.destroy() };
 }

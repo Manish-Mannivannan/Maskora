@@ -1,0 +1,5 @@
+{
+  "fixture": "X1a",
+  "description": "Truncated at 60%: no trailer or xref",
+  "outcome": "named failure or explicit recovery; never a hang"
+}

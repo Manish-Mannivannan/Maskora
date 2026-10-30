@@ -4,7 +4,11 @@
   "pages": [
     {
       "index": 0,
-      "rotate": 0,
+      "rotate": {
+        "raw": null,
+        "effective": 0,
+        "origin": "default"
+      },
       "userUnit": 1,
       "boxes": {
         "MediaBox": {

@@ -1,3 +1,4 @@
+mod geometry;
 mod sources;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -8,7 +9,8 @@ pub fn run() {
         .manage(sources::SourceRegistry::default())
         .invoke_handler(tauri::generate_handler![
             sources::select_source,
-            sources::read_source
+            sources::read_source,
+            geometry::inspect_geometry
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,0 +1,402 @@
+{
+  "fixture": "G5",
+  "description": "Rotate values: valid multiples of 90 (including negative and over 360) normalise; 45 is invalid",
+  "pages": [
+    {
+      "index": 0,
+      "rotate": {
+        "raw": 90,
+        "effective": 90,
+        "origin": "explicit"
+      },
+      "userUnit": 1,
+      "boxes": {
+        "MediaBox": {
+          "raw": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "explicit"
+        },
+        "CropBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "default"
+        },
+        "BleedBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "default"
+        },
+        "TrimBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "default"
+        },
+        "ArtBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "default"
+        }
+      }
+    },
+    {
+      "index": 1,
+      "rotate": {
+        "raw": 180,
+        "effective": 180,
+        "origin": "explicit"
+      },
+      "userUnit": 1,
+      "boxes": {
+        "MediaBox": {
+          "raw": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "explicit"
+        },
+        "CropBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "default"
+        },
+        "BleedBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "default"
+        },
+        "TrimBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "default"
+        },
+        "ArtBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "default"
+        }
+      }
+    },
+    {
+      "index": 2,
+      "rotate": {
+        "raw": 270,
+        "effective": 270,
+        "origin": "explicit"
+      },
+      "userUnit": 1,
+      "boxes": {
+        "MediaBox": {
+          "raw": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "explicit"
+        },
+        "CropBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "default"
+        },
+        "BleedBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "default"
+        },
+        "TrimBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "default"
+        },
+        "ArtBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "default"
+        }
+      }
+    },
+    {
+      "index": 3,
+      "rotate": {
+        "raw": 45,
+        "effective": null,
+        "origin": "invalid"
+      },
+      "userUnit": 1,
+      "boxes": {
+        "MediaBox": {
+          "raw": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "explicit"
+        },
+        "CropBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "default"
+        },
+        "BleedBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "default"
+        },
+        "TrimBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "default"
+        },
+        "ArtBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "default"
+        }
+      }
+    },
+    {
+      "index": 4,
+      "rotate": {
+        "raw": -90,
+        "effective": 270,
+        "origin": "explicit"
+      },
+      "userUnit": 1,
+      "boxes": {
+        "MediaBox": {
+          "raw": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "explicit"
+        },
+        "CropBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "default"
+        },
+        "BleedBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "default"
+        },
+        "TrimBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "default"
+        },
+        "ArtBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "default"
+        }
+      }
+    },
+    {
+      "index": 5,
+      "rotate": {
+        "raw": 450,
+        "effective": 90,
+        "origin": "explicit"
+      },
+      "userUnit": 1,
+      "boxes": {
+        "MediaBox": {
+          "raw": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "explicit"
+        },
+        "CropBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "default"
+        },
+        "BleedBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "default"
+        },
+        "TrimBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "default"
+        },
+        "ArtBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            500
+          ],
+          "origin": "default"
+        }
+      }
+    }
+  ]
+}

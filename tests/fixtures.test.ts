@@ -19,12 +19,18 @@ describe("synthetic PDF fixtures", () => {
       expect(readFileSync(join(dir, `${id}.expected.json`), "utf8")).toBe(expectedJson);
     });
 
-    it(`${id} is a structurally complete PDF`, () => {
+    // X1a (truncated) and X1c (not a PDF) are malformed on purpose: they must stay incomplete.
+    const malformed = id === "X1a" || id === "X1c";
+    it(`${id} is ${malformed ? "deliberately not" : ""} a structurally complete PDF`, () => {
       const text = pdf.toString("latin1");
-      expect(text.startsWith("%PDF-")).toBe(true);
-      expect(text.trimEnd().endsWith("%%EOF")).toBe(true);
-      const startxref = Number(/startxref\n(\d+)/.exec(text)?.[1]);
-      expect(text.slice(startxref, startxref + 4)).toBe("xref");
+      const complete =
+        text.startsWith("%PDF-") &&
+        text.trimEnd().endsWith("%%EOF") &&
+        text.slice(
+          Number(/startxref\n(\d+)/.exec(text)?.[1]),
+          Number(/startxref\n(\d+)/.exec(text)?.[1]) + 4,
+        ) === "xref";
+      expect(complete).toBe(!malformed);
     });
   }
 });

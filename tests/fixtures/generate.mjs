@@ -13,6 +13,7 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { CORPUS } from "./corpus.mjs";
 import { PdfBuilder, name, ref, stream } from "./pdf-writer.mjs";
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), "pdf");
@@ -56,7 +57,7 @@ export const FIXTURES = {
         pages: [
           {
             index: 0,
-            rotate: 0,
+            rotate: { raw: null, effective: 0, origin: "default" },
             userUnit: 1,
             boxes: Object.fromEntries(Object.entries(b).map(([k, v]) => [k, box(v, v, "explicit")])),
           },
@@ -76,7 +77,7 @@ export const FIXTURES = {
         pages: [
           {
             index: 0,
-            rotate: 0,
+            rotate: { raw: null, effective: 0, origin: "default" },
             userUnit: 1,
             boxes: {
               MediaBox: box(media, media, "explicit"),
@@ -95,7 +96,7 @@ export const FIXTURES = {
 /** Build every fixture in memory: { id: { pdf: Buffer, expectedJson: string } }. */
 export function buildAll() {
   const out = {};
-  for (const [id, make] of Object.entries(FIXTURES)) {
+  for (const [id, make] of Object.entries({ ...FIXTURES, ...CORPUS })) {
     const { pdf, expected } = make();
     out[id] = { pdf, expectedJson: `${JSON.stringify({ fixture: id, ...expected }, null, 2)}\n` };
   }

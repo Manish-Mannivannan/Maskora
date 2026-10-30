@@ -1,0 +1,36 @@
+{
+  "fixture": "M1",
+  "description": "Opaque mask page: black shape on a painted white page. Alpha is 1 everywhere, so only luminance separates",
+  "pages": [
+    {
+      "index": 0,
+      "boxes": {
+        "MediaBox": [
+          0,
+          0,
+          200,
+          200
+        ]
+      },
+      "samples": [
+        {
+          "id": "inside",
+          "at": [
+            70,
+            80
+          ],
+          "coverage": 1
+        },
+        {
+          "id": "outside",
+          "at": [
+            150,
+            150
+          ],
+          "coverage": 0
+        }
+      ],
+      "alphaUsable": false
+    }
+  ]
+}

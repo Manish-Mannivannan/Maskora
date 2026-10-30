@@ -1,0 +1,99 @@
+{
+  "fixture": "M3",
+  "description": "Ten grey bands 0.0–0.9: luminance at each band centre must rise monotonically, so thresholds are measurable",
+  "pages": [
+    {
+      "index": 0,
+      "boxes": {
+        "MediaBox": [
+          0,
+          0,
+          200,
+          200
+        ]
+      },
+      "samples": [
+        {
+          "id": "band0",
+          "at": [
+            10,
+            100
+          ],
+          "luminance": 0
+        },
+        {
+          "id": "band1",
+          "at": [
+            30,
+            100
+          ],
+          "luminance": 0.1
+        },
+        {
+          "id": "band2",
+          "at": [
+            50,
+            100
+          ],
+          "luminance": 0.2
+        },
+        {
+          "id": "band3",
+          "at": [
+            70,
+            100
+          ],
+          "luminance": 0.3
+        },
+        {
+          "id": "band4",
+          "at": [
+            90,
+            100
+          ],
+          "luminance": 0.4
+        },
+        {
+          "id": "band5",
+          "at": [
+            110,
+            100
+          ],
+          "luminance": 0.5
+        },
+        {
+          "id": "band6",
+          "at": [
+            130,
+            100
+          ],
+          "luminance": 0.6
+        },
+        {
+          "id": "band7",
+          "at": [
+            150,
+            100
+          ],
+          "luminance": 0.7
+        },
+        {
+          "id": "band8",
+          "at": [
+            170,
+            100
+          ],
+          "luminance": 0.8
+        },
+        {
+          "id": "band9",
+          "at": [
+            190,
+            100
+          ],
+          "luminance": 0.9
+        }
+      ]
+    }
+  ]
+}

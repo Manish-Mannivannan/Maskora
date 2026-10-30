@@ -1,0 +1,76 @@
+{
+  "fixture": "G6",
+  "description": "UserUnit 2: one user-space unit is 2/72 inch, so mm = pt × 2 × 25.4 / 72",
+  "pages": [
+    {
+      "index": 0,
+      "rotate": {
+        "raw": null,
+        "effective": 0,
+        "origin": "default"
+      },
+      "userUnit": 2,
+      "boxes": {
+        "MediaBox": {
+          "raw": [
+            0,
+            0,
+            300,
+            400
+          ],
+          "effective": [
+            0,
+            0,
+            300,
+            400
+          ],
+          "origin": "explicit"
+        },
+        "CropBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            400
+          ],
+          "origin": "default"
+        },
+        "BleedBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            400
+          ],
+          "origin": "default"
+        },
+        "TrimBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            400
+          ],
+          "origin": "default"
+        },
+        "ArtBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            300,
+            400
+          ],
+          "origin": "default"
+        }
+      },
+      "mediaSizeMm": [
+        211.6667,
+        282.2222
+      ]
+    }
+  ]
+}
