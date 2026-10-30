@@ -1,0 +1,88 @@
+{
+  "fixture": "G1",
+  "description": "All five boxes explicit with asymmetric insets",
+  "pages": [
+    {
+      "index": 0,
+      "rotate": 0,
+      "userUnit": 1,
+      "boxes": {
+        "MediaBox": {
+          "raw": [
+            0,
+            0,
+            600,
+            800
+          ],
+          "effective": [
+            0,
+            0,
+            600,
+            800
+          ],
+          "origin": "explicit"
+        },
+        "CropBox": {
+          "raw": [
+            4,
+            6,
+            592,
+            797
+          ],
+          "effective": [
+            4,
+            6,
+            592,
+            797
+          ],
+          "origin": "explicit"
+        },
+        "BleedBox": {
+          "raw": [
+            10,
+            12,
+            585,
+            790
+          ],
+          "effective": [
+            10,
+            12,
+            585,
+            790
+          ],
+          "origin": "explicit"
+        },
+        "TrimBox": {
+          "raw": [
+            19,
+            21,
+            576,
+            781
+          ],
+          "effective": [
+            19,
+            21,
+            576,
+            781
+          ],
+          "origin": "explicit"
+        },
+        "ArtBox": {
+          "raw": [
+            40,
+            50,
+            550,
+            740
+          ],
+          "effective": [
+            40,
+            50,
+            550,
+            740
+          ],
+          "origin": "explicit"
+        }
+      }
+    }
+  ]
+}

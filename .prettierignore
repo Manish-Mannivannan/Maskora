@@ -1,0 +1,14 @@
+.next/
+out/
+node_modules/
+package-lock.json
+src-tauri/target/
+src-tauri/gen/
+graphify-out/
+.claude/
+public/pdfjs/
+tests/fixtures/pdf/
+
+# Copied unchanged from the vault template; keep byte-identical to it
+scripts/sync-plan-issues.mjs
+scripts/prefix-graphify-vault.mjs

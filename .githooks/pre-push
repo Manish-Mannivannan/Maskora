@@ -1,0 +1,6 @@
+#!/bin/sh
+# Run the root check before anything leaves the machine.
+# Enabled by `npm install` / `npm run setup` via core.hooksPath.
+# Bypass only deliberately: git push --no-verify
+set -e
+exec npm run --silent check

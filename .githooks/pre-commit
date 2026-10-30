@@ -1,0 +1,6 @@
+#!/bin/sh
+# Refuse a commit that adds a credential or cites a vault ADR number.
+# Enabled by `npm install` / `npm run setup` via core.hooksPath.
+# Bypass only deliberately: git commit --no-verify
+set -e
+exec npm run --silent check:conventions

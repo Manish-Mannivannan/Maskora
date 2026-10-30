@@ -1,0 +1,68 @@
+{
+  "fixture": "G2",
+  "description": "MediaBox only; every other box is a format default",
+  "pages": [
+    {
+      "index": 0,
+      "rotate": 0,
+      "userUnit": 1,
+      "boxes": {
+        "MediaBox": {
+          "raw": [
+            0,
+            0,
+            420,
+            595
+          ],
+          "effective": [
+            0,
+            0,
+            420,
+            595
+          ],
+          "origin": "explicit"
+        },
+        "CropBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            420,
+            595
+          ],
+          "origin": "default"
+        },
+        "BleedBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            420,
+            595
+          ],
+          "origin": "default"
+        },
+        "TrimBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            420,
+            595
+          ],
+          "origin": "default"
+        },
+        "ArtBox": {
+          "raw": null,
+          "effective": [
+            0,
+            0,
+            420,
+            595
+          ],
+          "origin": "default"
+        }
+      }
+    }
+  ]
+}

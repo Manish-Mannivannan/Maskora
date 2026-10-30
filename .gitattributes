@@ -1,1 +1,13 @@
+# The repository holds LF. Windows checkouts may show CRLF warnings; content
+# is normalised on commit.
+* text=auto eol=lf
+
+*.png binary
+*.ico binary
+*.icns binary
+*.pdf binary
+*.hdr binary
+
+# Graphify's graph merges as a union of both sides instead of conflicting.
+# The driver itself is registered per clone by `npm run setup`.
 graphify-out/graph.json merge=graphify

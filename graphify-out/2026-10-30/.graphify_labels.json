@@ -15,5 +15,7 @@
   "13": "main.rs",
   "14": "maskora",
   "15": "vite-env.d.ts",
-  "16": "vite.config.ts"
+  "16": "vite.config.ts",
+  "17": "dependencies",
+  "18": "prefix-graphify-vault.mjs"
 }

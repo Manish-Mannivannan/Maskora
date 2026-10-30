@@ -208,6 +208,30 @@
       "source_location": "L118"
     },
     {
+      "id": "scripts_prefix_graphify_vault_allmd",
+      "label": "allMd()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 18,
+      "community_name": "prefix-graphify-vault.mjs",
+      "file_type": "code",
+      "norm_label": "allmd()",
+      "source_file": "scripts/prefix-graphify-vault.mjs",
+      "source_location": "L56"
+    },
+    {
+      "id": "scripts_prefix_graphify_vault_basename",
+      "label": "basename()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 18,
+      "community_name": "prefix-graphify-vault.mjs",
+      "file_type": "code",
+      "norm_label": "basename()",
+      "source_file": "scripts/prefix-graphify-vault.mjs",
+      "source_location": "L96"
+    },
+    {
       "id": "src_app_app",
       "label": "App()",
       "_callable": true,
@@ -801,6 +825,171 @@
       "source_location": "L1"
     },
     {
+      "id": "package_dependencies",
+      "label": "dependencies",
+      "_origin": "ast",
+      "community": 17,
+      "community_name": "dependencies",
+      "file_type": "code",
+      "norm_label": "dependencies",
+      "source_file": "package.json",
+      "source_location": "L14"
+    },
+    {
+      "id": "package_dependencies_react",
+      "label": "react",
+      "_origin": "ast",
+      "community": 17,
+      "community_name": "dependencies",
+      "file_type": "code",
+      "norm_label": "react",
+      "source_file": "package.json",
+      "source_location": "L15"
+    },
+    {
+      "id": "package_dependencies_react_dom",
+      "label": "react-dom",
+      "_origin": "ast",
+      "community": 17,
+      "community_name": "dependencies",
+      "file_type": "code",
+      "norm_label": "react-dom",
+      "source_file": "package.json",
+      "source_location": "L16"
+    },
+    {
+      "id": "package_dependencies_tauri_apps_api",
+      "label": "@tauri-apps/api",
+      "_origin": "ast",
+      "community": 17,
+      "community_name": "dependencies",
+      "file_type": "code",
+      "norm_label": "@tauri-apps/api",
+      "source_file": "package.json",
+      "source_location": "L17"
+    },
+    {
+      "id": "package_dependencies_tauri_apps_plugin_opener",
+      "label": "@tauri-apps/plugin-opener",
+      "_origin": "ast",
+      "community": 17,
+      "community_name": "dependencies",
+      "file_type": "code",
+      "norm_label": "@tauri-apps/plugin-opener",
+      "source_file": "package.json",
+      "source_location": "L18"
+    },
+    {
+      "id": "react",
+      "label": "react",
+      "_origin": "ast",
+      "community": 17,
+      "community_name": "dependencies",
+      "file_type": "concept",
+      "norm_label": "react",
+      "source_file": "package.json",
+      "source_location": "L15"
+    },
+    {
+      "id": "react_dom",
+      "label": "react-dom",
+      "_origin": "ast",
+      "community": 17,
+      "community_name": "dependencies",
+      "file_type": "concept",
+      "norm_label": "react-dom",
+      "source_file": "package.json",
+      "source_location": "L16"
+    },
+    {
+      "id": "tauri_apps_api",
+      "label": "@tauri-apps/api",
+      "_origin": "ast",
+      "community": 17,
+      "community_name": "dependencies",
+      "file_type": "concept",
+      "norm_label": "@tauri-apps/api",
+      "source_file": "package.json",
+      "source_location": "L17"
+    },
+    {
+      "id": "tauri_apps_plugin_opener",
+      "label": "@tauri-apps/plugin-opener",
+      "_origin": "ast",
+      "community": 17,
+      "community_name": "dependencies",
+      "file_type": "concept",
+      "norm_label": "@tauri-apps/plugin-opener",
+      "source_file": "package.json",
+      "source_location": "L18"
+    },
+    {
+      "id": "scripts_prefix_graphify_vault",
+      "label": "prefix-graphify-vault.mjs",
+      "_origin": "ast",
+      "community": 18,
+      "community_name": "prefix-graphify-vault.mjs",
+      "file_type": "code",
+      "norm_label": "prefix-graphify-vault.mjs",
+      "source_file": "scripts/prefix-graphify-vault.mjs",
+      "source_location": "L1"
+    },
+    {
+      "id": "scripts_prefix_graphify_vault_canvaspath",
+      "label": "canvasPath",
+      "_origin": "ast",
+      "community": 18,
+      "community_name": "prefix-graphify-vault.mjs",
+      "file_type": "code",
+      "norm_label": "canvaspath",
+      "source_file": "scripts/prefix-graphify-vault.mjs",
+      "source_location": "L129"
+    },
+    {
+      "id": "scripts_prefix_graphify_vault_default_dir",
+      "label": "DEFAULT_DIR",
+      "_origin": "ast",
+      "community": 18,
+      "community_name": "prefix-graphify-vault.mjs",
+      "file_type": "code",
+      "norm_label": "default_dir",
+      "source_file": "scripts/prefix-graphify-vault.mjs",
+      "source_location": "L47"
+    },
+    {
+      "id": "scripts_prefix_graphify_vault_dir",
+      "label": "dir",
+      "_origin": "ast",
+      "community": 18,
+      "community_name": "prefix-graphify-vault.mjs",
+      "file_type": "code",
+      "norm_label": "dir",
+      "source_file": "scripts/prefix-graphify-vault.mjs",
+      "source_location": "L49"
+    },
+    {
+      "id": "scripts_prefix_graphify_vault_generated",
+      "label": "generated",
+      "_origin": "ast",
+      "community": 18,
+      "community_name": "prefix-graphify-vault.mjs",
+      "file_type": "code",
+      "norm_label": "generated",
+      "source_file": "scripts/prefix-graphify-vault.mjs",
+      "source_location": "L86"
+    },
+    {
+      "id": "scripts_prefix_graphify_vault_unprefixed",
+      "label": "unprefixed",
+      "_origin": "ast",
+      "community": 18,
+      "community_name": "prefix-graphify-vault.mjs",
+      "file_type": "code",
+      "norm_label": "unprefixed",
+      "source_file": "scripts/prefix-graphify-vault.mjs",
+      "source_location": "L64"
+    },
+    {
       "id": "package",
       "label": "package.json",
       "_origin": "ast",
@@ -810,61 +999,6 @@
       "norm_label": "package.json",
       "source_file": "package.json",
       "source_location": "L1"
-    },
-    {
-      "id": "package_dependencies",
-      "label": "dependencies",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "package.json",
-      "file_type": "code",
-      "norm_label": "dependencies",
-      "source_file": "package.json",
-      "source_location": "L13"
-    },
-    {
-      "id": "package_dependencies_react",
-      "label": "react",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "package.json",
-      "file_type": "code",
-      "norm_label": "react",
-      "source_file": "package.json",
-      "source_location": "L14"
-    },
-    {
-      "id": "package_dependencies_react_dom",
-      "label": "react-dom",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "package.json",
-      "file_type": "code",
-      "norm_label": "react-dom",
-      "source_file": "package.json",
-      "source_location": "L15"
-    },
-    {
-      "id": "package_dependencies_tauri_apps_api",
-      "label": "@tauri-apps/api",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "package.json",
-      "file_type": "code",
-      "norm_label": "@tauri-apps/api",
-      "source_file": "package.json",
-      "source_location": "L16"
-    },
-    {
-      "id": "package_dependencies_tauri_apps_plugin_opener",
-      "label": "@tauri-apps/plugin-opener",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "package.json",
-      "file_type": "code",
-      "norm_label": "@tauri-apps/plugin-opener",
-      "source_file": "package.json",
-      "source_location": "L17"
     },
     {
       "id": "package_name",
@@ -922,6 +1056,17 @@
       "source_location": "L7"
     },
     {
+      "id": "package_scripts_graphify_vault",
+      "label": "graphify:vault",
+      "_origin": "ast",
+      "community": 2,
+      "community_name": "package.json",
+      "file_type": "code",
+      "norm_label": "graphify:vault",
+      "source_file": "package.json",
+      "source_location": "L12"
+    },
+    {
       "id": "package_scripts_plan_issues",
       "label": "plan:issues",
       "_origin": "ast",
@@ -975,50 +1120,6 @@
       "norm_label": "version",
       "source_file": "package.json",
       "source_location": "L4"
-    },
-    {
-      "id": "react",
-      "label": "react",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "package.json",
-      "file_type": "concept",
-      "norm_label": "react",
-      "source_file": "package.json",
-      "source_location": "L14"
-    },
-    {
-      "id": "react_dom",
-      "label": "react-dom",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "package.json",
-      "file_type": "concept",
-      "norm_label": "react-dom",
-      "source_file": "package.json",
-      "source_location": "L15"
-    },
-    {
-      "id": "tauri_apps_api",
-      "label": "@tauri-apps/api",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "package.json",
-      "file_type": "concept",
-      "norm_label": "@tauri-apps/api",
-      "source_file": "package.json",
-      "source_location": "L16"
-    },
-    {
-      "id": "tauri_apps_plugin_opener",
-      "label": "@tauri-apps/plugin-opener",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "package.json",
-      "file_type": "concept",
-      "norm_label": "@tauri-apps/plugin-opener",
-      "source_file": "package.json",
-      "source_location": "L17"
     },
     {
       "id": "src_tauri_tauri_conf",
@@ -1183,7 +1284,7 @@
       "file_type": "code",
       "norm_label": "devdependencies",
       "source_file": "package.json",
-      "source_location": "L19"
+      "source_location": "L20"
     },
     {
       "id": "package_devdependencies_tauri_apps_cli",
@@ -1194,7 +1295,7 @@
       "file_type": "code",
       "norm_label": "@tauri-apps/cli",
       "source_file": "package.json",
-      "source_location": "L25"
+      "source_location": "L26"
     },
     {
       "id": "package_devdependencies_types_react",
@@ -1205,7 +1306,7 @@
       "file_type": "code",
       "norm_label": "@types/react",
       "source_file": "package.json",
-      "source_location": "L20"
+      "source_location": "L21"
     },
     {
       "id": "package_devdependencies_types_react_dom",
@@ -1216,7 +1317,7 @@
       "file_type": "code",
       "norm_label": "@types/react-dom",
       "source_file": "package.json",
-      "source_location": "L21"
+      "source_location": "L22"
     },
     {
       "id": "package_devdependencies_typescript",
@@ -1227,7 +1328,7 @@
       "file_type": "code",
       "norm_label": "typescript",
       "source_file": "package.json",
-      "source_location": "L23"
+      "source_location": "L24"
     },
     {
       "id": "package_devdependencies_vite",
@@ -1238,7 +1339,7 @@
       "file_type": "code",
       "norm_label": "vite",
       "source_file": "package.json",
-      "source_location": "L24"
+      "source_location": "L25"
     },
     {
       "id": "package_devdependencies_vitejs_plugin_react",
@@ -1249,7 +1350,7 @@
       "file_type": "code",
       "norm_label": "@vitejs/plugin-react",
       "source_file": "package.json",
-      "source_location": "L22"
+      "source_location": "L23"
     },
     {
       "id": "tauri_apps_cli",
@@ -1260,7 +1361,7 @@
       "file_type": "concept",
       "norm_label": "@tauri-apps/cli",
       "source_file": "package.json",
-      "source_location": "L25"
+      "source_location": "L26"
     },
     {
       "id": "types_react",
@@ -1271,7 +1372,7 @@
       "file_type": "concept",
       "norm_label": "@types/react",
       "source_file": "package.json",
-      "source_location": "L20"
+      "source_location": "L21"
     },
     {
       "id": "types_react_dom",
@@ -1282,7 +1383,7 @@
       "file_type": "concept",
       "norm_label": "@types/react-dom",
       "source_file": "package.json",
-      "source_location": "L21"
+      "source_location": "L22"
     },
     {
       "id": "typescript",
@@ -1293,7 +1394,7 @@
       "file_type": "concept",
       "norm_label": "typescript",
       "source_file": "package.json",
-      "source_location": "L23"
+      "source_location": "L24"
     },
     {
       "id": "vite",
@@ -1304,7 +1405,7 @@
       "file_type": "concept",
       "norm_label": "vite",
       "source_file": "package.json",
-      "source_location": "L24"
+      "source_location": "L25"
     },
     {
       "id": "vitejs_plugin_react",
@@ -1315,7 +1416,7 @@
       "file_type": "concept",
       "norm_label": "@vitejs/plugin-react",
       "source_file": "package.json",
-      "source_location": "L22"
+      "source_location": "L23"
     },
     {
       "id": "src_tauri_capabilities_default",
@@ -2063,7 +2164,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "package.json",
-      "source_location": "L14",
+      "source_location": "L15",
       "weight": 1.0
     },
     {
@@ -2075,7 +2176,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "package.json",
-      "source_location": "L15",
+      "source_location": "L16",
       "weight": 1.0
     },
     {
@@ -2087,7 +2188,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "package.json",
-      "source_location": "L16",
+      "source_location": "L17",
       "weight": 1.0
     },
     {
@@ -2099,7 +2200,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "package.json",
-      "source_location": "L17",
+      "source_location": "L18",
       "weight": 1.0
     },
     {
@@ -2111,7 +2212,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "package.json",
-      "source_location": "L25",
+      "source_location": "L26",
       "weight": 1.0
     },
     {
@@ -2123,7 +2224,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "package.json",
-      "source_location": "L20",
+      "source_location": "L21",
       "weight": 1.0
     },
     {
@@ -2135,7 +2236,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "package.json",
-      "source_location": "L21",
+      "source_location": "L22",
       "weight": 1.0
     },
     {
@@ -2147,7 +2248,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "package.json",
-      "source_location": "L23",
+      "source_location": "L24",
       "weight": 1.0
     },
     {
@@ -2159,7 +2260,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "package.json",
-      "source_location": "L24",
+      "source_location": "L25",
       "weight": 1.0
     },
     {
@@ -2171,7 +2272,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "package.json",
-      "source_location": "L22",
+      "source_location": "L23",
       "weight": 1.0
     },
     {
@@ -2229,18 +2330,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "package.json",
-      "source_location": "L13",
-      "weight": 1.0
-    },
-    {
-      "source": "package",
-      "target": "package_devdependencies",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "package.json",
-      "source_location": "L19",
+      "source_location": "L14",
       "weight": 1.0
     },
     {
@@ -2252,6 +2342,17 @@
       "confidence_score": 1.0,
       "source_file": "package.json",
       "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "package",
+      "target": "package_devdependencies",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "package.json",
+      "source_location": "L20",
       "weight": 1.0
     },
     {
@@ -2306,7 +2407,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "package.json",
-      "source_location": "L14",
+      "source_location": "L15",
       "weight": 1.0
     },
     {
@@ -2317,7 +2418,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "package.json",
-      "source_location": "L15",
+      "source_location": "L16",
       "weight": 1.0
     },
     {
@@ -2328,7 +2429,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "package.json",
-      "source_location": "L16",
+      "source_location": "L17",
       "weight": 1.0
     },
     {
@@ -2339,7 +2440,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "package.json",
-      "source_location": "L17",
+      "source_location": "L18",
       "weight": 1.0
     },
     {
@@ -2350,7 +2451,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "package.json",
-      "source_location": "L20",
+      "source_location": "L21",
       "weight": 1.0
     },
     {
@@ -2361,7 +2462,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "package.json",
-      "source_location": "L21",
+      "source_location": "L22",
       "weight": 1.0
     },
     {
@@ -2372,7 +2473,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "package.json",
-      "source_location": "L22",
+      "source_location": "L23",
       "weight": 1.0
     },
     {
@@ -2383,7 +2484,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "package.json",
-      "source_location": "L23",
+      "source_location": "L24",
       "weight": 1.0
     },
     {
@@ -2394,7 +2495,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "package.json",
-      "source_location": "L24",
+      "source_location": "L25",
       "weight": 1.0
     },
     {
@@ -2405,7 +2506,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "package.json",
-      "source_location": "L25",
+      "source_location": "L26",
       "weight": 1.0
     },
     {
@@ -2428,6 +2529,17 @@
       "confidence_score": 1.0,
       "source_file": "package.json",
       "source_location": "L11",
+      "weight": 1.0
+    },
+    {
+      "source": "package_scripts",
+      "target": "package_scripts_graphify_vault",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "package.json",
+      "source_location": "L12",
       "weight": 1.0
     },
     {
@@ -2483,6 +2595,83 @@
       "confidence_score": 1.0,
       "source_file": "README.md",
       "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "scripts_prefix_graphify_vault",
+      "target": "scripts_prefix_graphify_vault_canvaspath",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/prefix-graphify-vault.mjs",
+      "source_location": "L129",
+      "weight": 1.0
+    },
+    {
+      "source": "scripts_prefix_graphify_vault",
+      "target": "scripts_prefix_graphify_vault_default_dir",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/prefix-graphify-vault.mjs",
+      "source_location": "L47",
+      "weight": 1.0
+    },
+    {
+      "source": "scripts_prefix_graphify_vault",
+      "target": "scripts_prefix_graphify_vault_dir",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/prefix-graphify-vault.mjs",
+      "source_location": "L49",
+      "weight": 1.0
+    },
+    {
+      "source": "scripts_prefix_graphify_vault",
+      "target": "scripts_prefix_graphify_vault_allmd",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/prefix-graphify-vault.mjs",
+      "source_location": "L56",
+      "weight": 1.0
+    },
+    {
+      "source": "scripts_prefix_graphify_vault",
+      "target": "scripts_prefix_graphify_vault_unprefixed",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/prefix-graphify-vault.mjs",
+      "source_location": "L64",
+      "weight": 1.0
+    },
+    {
+      "source": "scripts_prefix_graphify_vault",
+      "target": "scripts_prefix_graphify_vault_generated",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/prefix-graphify-vault.mjs",
+      "source_location": "L86",
+      "weight": 1.0
+    },
+    {
+      "source": "scripts_prefix_graphify_vault",
+      "target": "scripts_prefix_graphify_vault_basename",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/prefix-graphify-vault.mjs",
+      "source_location": "L96",
       "weight": 1.0
     },
     {

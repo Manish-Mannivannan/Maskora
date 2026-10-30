@@ -6,9 +6,9 @@
     "semantic_hash": ""
   },
   "package.json": {
-    "mtime": 1793325414.5982854,
-    "seen": 1793327728.4968722,
-    "ast_hash": "b2bdca258f85b58ee87eba74d696dfbc",
+    "mtime": 1793327765.3914413,
+    "seen": 1793327987.5434794,
+    "ast_hash": "77448bd8765da30e641c096144f0374a",
     "semantic_hash": ""
   },
   "scripts/sync-plan-issues.mjs": {
@@ -207,6 +207,12 @@
     "mtime": 1793324750.5534415,
     "seen": 1793327728.4968722,
     "ast_hash": "f0402b67b6ce880f65666bb49e841696",
+    "semantic_hash": ""
+  },
+  "scripts/prefix-graphify-vault.mjs": {
+    "mtime": 1793327843.0263631,
+    "seen": 1793327987.5434794,
+    "ast_hash": "d647ff6770d996a7a758b499765b86f1",
     "semantic_hash": ""
   }
 }

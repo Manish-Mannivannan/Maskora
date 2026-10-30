@@ -1,55 +1,69 @@
 # Graph Report - Maskora  (2026-10-30)
 
 ## Corpus Check
-- 18 files · ~5,755 words
+- 35 files · ~10,611 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 159 nodes · 162 edges · 19 communities (14 shown, 5 thin omitted)
-- Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
+- 290 nodes · 303 edges · 30 communities (22 shown, 8 thin omitted)
+- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 3 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `343b9fd2`
+- Built from commit: `54922b13`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - sync-plan-issues.mjs
 - compilerOptions
-- package.json
+- scripts
 - tauri.conf.json
 - devDependencies
 - default.json
-- icon
-- compilerOptions
-- App
+- generate.mjs
+- AGENTS.md — Instructions for coding agents
+- include
 - lib.rs
-- Tauri + React + Typescript
+- Maskora
 - CLAUDE.md
 - maskora
+- check-versions.mjs
+- webdriver.mjs
 - dependencies
 - prefix-graphify-vault.mjs
+- check-secrets.mjs
+- check-adr-references.mjs
+- .prettierrc.json
+- layout.tsx
+- pre-commit
+- pre-push
+- next.config.ts
 
 ## God Nodes (most connected - your core abstractions)
-1. `compilerOptions` - 16 edges
-2. `scripts` - 7 edges
-3. `slice()` - 6 edges
-4. `readPhase()` - 6 edges
-5. `icon` - 6 edges
-6. `compilerOptions` - 6 edges
-7. `rewrite()` - 5 edges
-8. `build` - 5 edges
-9. `gh()` - 4 edges
-10. `bundle` - 4 edges
+1. `compilerOptions` - 19 edges
+2. `scripts` - 17 edges
+3. `AGENTS.md — Instructions for coding agents` - 11 edges
+4. `Maskora` - 10 edges
+5. `singlePage()` - 7 edges
+6. `PdfBuilder` - 7 edges
+7. `include` - 7 edges
+8. `slice()` - 6 edges
+9. `readPhase()` - 6 edges
+10. `icon` - 6 edges
 
 ## Surprising Connections (you probably didn't know these)
-- None detected - all connections are within the same source files.
+- `singlePage()` --calls--> `name()`  [EXTRACTED]
+  tests/fixtures/generate.mjs → tests/fixtures/pdf-writer.mjs
+- `singlePage()` --calls--> `ref()`  [EXTRACTED]
+  tests/fixtures/generate.mjs → tests/fixtures/pdf-writer.mjs
+- `singlePage()` --calls--> `stream()`  [EXTRACTED]
+  tests/fixtures/generate.mjs → tests/fixtures/pdf-writer.mjs
 
 ## Import Cycles
 - None detected.
 
-## Communities (19 total, 5 thin omitted)
+## Communities (30 total, 8 thin omitted)
 
 ### Community 0 - "sync-plan-issues.mjs"
 Cohesion: 0.09
@@ -57,57 +71,83 @@ Nodes (32): args, bodyFor(), dryIndex, existing, gh(), ghLines(), haveLabels, he
 
 ### Community 1 - "compilerOptions"
 Cohesion: 0.09
-Nodes (21): DOM, ES2020, src, compilerOptions, allowImportingTsExtensions, isolatedModules, jsx, lib (+13 more)
+Nodes (22): dom, dom.iterable, ES2023, compilerOptions, allowJs, esModuleInterop, incremental, isolatedModules (+14 more)
 
-### Community 2 - "package.json"
-Cohesion: 0.17
-Nodes (11): name, private, scripts, build, dev, graphify:vault, plan:issues, preview (+3 more)
+### Community 2 - "scripts"
+Cohesion: 0.08
+Nodes (23): engines, node, name, private, scripts, build, check, check:conventions (+15 more)
 
 ### Community 3 - "tauri.conf.json"
-Cohesion: 0.14
-Nodes (13): app, security, windows, build, beforeBuildCommand, beforeDevCommand, devUrl, frontendDist (+5 more)
+Cohesion: 0.09
+Nodes (22): icons/128x128@2x.png, icons/128x128.png, icons/32x32.png, icons/icon.icns, icons/icon.ico, app, security, windows (+14 more)
 
 ### Community 4 - "devDependencies"
-Cohesion: 0.15
-Nodes (13): devDependencies, @tauri-apps/cli, @types/react, @types/react-dom, typescript, vite, @vitejs/plugin-react, @tauri-apps/cli (+5 more)
+Cohesion: 0.10
+Nodes (21): eslint, eslint-config-next, devDependencies, eslint, eslint-config-next, prettier, @tauri-apps/cli, @types/node (+13 more)
 
 ### Community 5 - "default.json"
 Cohesion: 0.22
 Nodes (8): core:default, main, opener:default, description, identifier, permissions, $schema, windows
 
-### Community 6 - "icon"
-Cohesion: 0.22
-Nodes (9): icons/128x128@2x.png, icons/128x128.png, icons/32x32.png, icons/icon.icns, icons/icon.ico, bundle, active, icon (+1 more)
+### Community 6 - "generate.mjs"
+Cohesion: 0.14
+Nodes (13): buildAll(), FIXTURES, OUT, singlePage(), escapeString(), name(), num(), PdfBuilder (+5 more)
 
-### Community 7 - "compilerOptions"
-Cohesion: 0.22
-Nodes (8): vite.config.ts, compilerOptions, allowSyntheticDefaultImports, composite, module, moduleResolution, skipLibCheck, include
+### Community 7 - "AGENTS.md — Instructions for coding agents"
+Cohesion: 0.17
+Nodes (11): AGENTS.md — Instructions for coding agents, Commits belong to the maintainer, Do not cite vault ADR numbers in the repository, Graphify, Keep architecture, plan, and code synchronized, Next.js version, Project invariants, Read canonical project documents first (+3 more)
+
+### Community 8 - "include"
+Cohesion: 0.17
+Nodes (11): .next/dev/types/**/*.ts, next-env.d.ts, .next/types/**/*.ts, node_modules, out, src-tauri, src/**/*.ts, src/**/*.tsx (+3 more)
+
+### Community 10 - "Maskora"
+Cohesion: 0.10
+Nodes (18): Build, Check, Codebase map, Fixtures, Maskora, Plan mirror, Prerequisites, Run (+10 more)
+
+### Community 15 - "check-versions.mjs"
+Cohesion: 0.18
+Nodes (7): cargoLock, declared, npmRows, pkg, problems, root, versionsMd
+
+### Community 16 - "webdriver.mjs"
+Cohesion: 0.27
+Nodes (8): results, call(), locate(), openApp(), PORT, ROOT, sleep(), webview2Version()
 
 ### Community 17 - "dependencies"
-Cohesion: 0.22
-Nodes (9): dependencies, react, react-dom, @tauri-apps/api, @tauri-apps/plugin-opener, react, react-dom, @tauri-apps/api (+1 more)
+Cohesion: 0.12
+Nodes (17): next, dependencies, next, pdfjs-dist, react, react-dom, @react-three/drei, @react-three/fiber (+9 more)
 
 ### Community 18 - "prefix-graphify-vault.mjs"
 Cohesion: 0.25
 Nodes (5): canvasPath, DEFAULT_DIR, dir, generated, unprefixed
 
+### Community 19 - "check-secrets.mjs"
+Cohesion: 0.33
+Nodes (3): findings, repoRoot, TOKEN_PATTERNS
+
+### Community 20 - "check-adr-references.mjs"
+Cohesion: 0.40
+Nodes (3): GENERATED, repoRoot, violations
+
 ## Knowledge Gaps
-- **91 isolated node(s):** `name`, `private`, `version`, `type`, `dev` (+86 more)
+- **162 isolated node(s):** `printWidth`, `endOfLine`, `nextConfig`, `name`, `private` (+157 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **5 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **8 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `devDependencies` connect `devDependencies` to `package.json`?**
-  _High betweenness centrality (0.025) - this node is a cross-community bridge._
-- **Why does `dependencies` connect `dependencies` to `package.json`?**
-  _High betweenness centrality (0.018) - this node is a cross-community bridge._
-- **What connects `name`, `private`, `version` to the rest of the system?**
-  _91 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Why does `devDependencies` connect `devDependencies` to `scripts`?**
+  _High betweenness centrality (0.024) - this node is a cross-community bridge._
+- **Why does `dependencies` connect `dependencies` to `scripts`?**
+  _High betweenness centrality (0.020) - this node is a cross-community bridge._
+- **What connects `printWidth`, `endOfLine`, `nextConfig` to the rest of the system?**
+  _162 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `sync-plan-issues.mjs` be split into smaller, more focused modules?**
   _Cohesion score 0.09090909090909091 - nodes in this community are weakly interconnected._
 - **Should `compilerOptions` be split into smaller, more focused modules?**
   _Cohesion score 0.09090909090909091 - nodes in this community are weakly interconnected._
+- **Should `scripts` be split into smaller, more focused modules?**
+  _Cohesion score 0.08333333333333333 - nodes in this community are weakly interconnected._
 - **Should `tauri.conf.json` be split into smaller, more focused modules?**
-  _Cohesion score 0.14285714285714285 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08695652173913043 - nodes in this community are weakly interconnected._
