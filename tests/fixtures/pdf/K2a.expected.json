@@ -1,0 +1,8 @@
+{
+  "fixture": "K2a",
+  "description": "Artwork alone: one page, 100 × 150 mm trim with 3 mm bleed; its masks are in K2m",
+  "trimMm": [
+    100,
+    150
+  ]
+}

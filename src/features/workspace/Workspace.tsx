@@ -8,7 +8,10 @@
  */
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
-import { DocumentSection } from "@/features/document/DocumentSection";
+import { SourcesSection } from "@/features/document/SourcesSection";
+import { pageName, usePageSummaries } from "@/features/document/usePages";
+import { FinishesSection } from "@/features/finishes/FinishesSection";
+import RegistrationView from "@/features/registration/RegistrationView";
 import { PageInspector } from "@/features/document/PageInspector";
 import { PagesSection } from "@/features/document/PagesSection";
 import { ProjectProvider, useProject } from "@/project/ProjectContext";
@@ -38,8 +41,75 @@ export default function Workspace() {
 }
 
 function PagesSummary() {
-  const [{ source }] = useProject();
-  return source ? <>{source.pageCount}</> : null;
+  const [{ sources }] = useProject();
+  const total = sources.reduce((n, s) => n + s.pageCount, 0);
+  return total ? <>{total}</> : null;
+}
+
+function ViewControls({ onResetCamera }: { onResetCamera: () => void }) {
+  const [{ view, model, sources }, store] = useProject();
+  const summaries = usePageSummaries();
+  return (
+    <>
+      <div className="segmented" role="radiogroup" aria-label="Main view">
+        <button
+          type="button"
+          role="radio"
+          aria-checked={view.mode === "3d"}
+          data-testid="view-3d"
+          onClick={() => store.setView({ mode: "3d" })}
+        >
+          3D view
+        </button>
+        <button
+          type="button"
+          role="radio"
+          aria-checked={view.mode === "registration"}
+          data-testid="view-registration"
+          onClick={() => store.setView({ mode: "registration" })}
+        >
+          Registration
+        </button>
+      </div>
+      {view.mode === "registration" ? (
+        <label>
+          Printed page shown
+          <select
+            data-testid="registration-surface"
+            value={view.surfaceId ?? ""}
+            onChange={(e) => store.setView({ surfaceId: e.target.value || null })}
+          >
+            <option value="">Follow the selected finish</option>
+            {model.surfaces.map((s) => (
+              <option key={s.id} value={s.id}>
+                {pageName(sources, summaries, s.artwork)}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <>
+          <button type="button" data-testid="reset-camera" onClick={onResetCamera}>
+            Reset camera
+          </button>
+          <p className="hint">Camera: left-drag orbits, right-drag pans, wheel zooms.</p>
+        </>
+      )}
+    </>
+  );
+}
+
+function MainView({ children }: { children: React.ReactNode }) {
+  const [{ view }] = useProject();
+  // The 3D view stays mounted while hidden, so its camera and light are kept.
+  return (
+    <div className="main-view">
+      <div className="main-layer" hidden={view.mode !== "3d"}>
+        {children}
+      </div>
+      {view.mode === "registration" ? <RegistrationView /> : null}
+    </div>
+  );
 }
 
 function Shell() {
@@ -72,14 +142,17 @@ function Shell() {
       <aside className="panel" data-testid="panel" aria-label="Controls">
         <h1 className="app-name">Maskora</h1>
 
-        <Section id="document" title="Document">
-          <DocumentSection />
+        <Section id="sources" title="Sources">
+          <SourcesSection />
         </Section>
         <Section id="pages" title="Pages" summary={<PagesSummary />}>
           <PagesSection />
         </Section>
         <Section id="page" title="Selected page">
           <PageInspector />
+        </Section>
+        <Section id="finishes" title="Finishes">
+          <FinishesSection />
         </Section>
 
         <Section id="lighting" title="Lighting">
@@ -152,10 +225,7 @@ function Shell() {
         </Section>
 
         <Section id="view" title="View">
-          <button type="button" data-testid="reset-camera" onClick={() => setResetSignal((n) => n + 1)}>
-            Reset camera
-          </button>
-          <p className="hint">Camera: left-drag orbits, right-drag pans, wheel zooms.</p>
+          <ViewControls onResetCamera={() => setResetSignal((n) => n + 1)} />
         </Section>
       </aside>
 
@@ -184,13 +254,15 @@ function Shell() {
         }}
       />
 
-      <Viewport
-        mode={mode}
-        light={light}
-        intensity={intensity}
-        onLightChange={setLight}
-        resetSignal={resetSignal}
-      />
+      <MainView>
+        <Viewport
+          mode={mode}
+          light={light}
+          intensity={intensity}
+          onLightChange={setLight}
+          resetSignal={resetSignal}
+        />
+      </MainView>
     </div>
   );
 }

@@ -82,7 +82,19 @@ const status = async () => {
   return { state: await app.attr(el, "data-state"), text: await app.text(el) };
 };
 /** Open a fixture through the real dialog and wait until it settles. */
-const pick = async (id) => {
+/** Remove every source, so a scenario starts from an empty project. */
+const clearSources = async () => {
+  for (let i = 0; i < 20; i += 1) {
+    const n = await q(`return document.querySelectorAll('[data-testid="remove-source"]').length;`);
+    if (!n) return;
+    await app.click(await app.find('[data-testid="remove-source"]'));
+    await sleep(150);
+  }
+  throw new Error("sources could not be removed");
+};
+/** Add a fixture through the real dialog and wait until it settles; `keep` adds it beside the open ones. */
+const pick = async (id, { keep = false } = {}) => {
+  if (!keep) await clearSources();
   await app.click(await app.find('[data-testid="open-pdf"]'));
   await dialog(["-Path", join(FIXTURES, `${id}.pdf`)]);
   for (let i = 0; i < 120; i += 1) {
@@ -109,13 +121,63 @@ const boxOrigins = () =>
   q(
     `return Object.fromEntries([...document.querySelectorAll('[data-testid="box-table"] tbody tr')].map(r => [r.dataset.box, r.dataset.origin]));`,
   );
-const selectThumb = async (index) => {
-  await app.click(await app.find(`[data-testid="thumb"][data-index="${index}"]`));
+const selectThumb = async (index, source) => {
+  const of = source ? `[data-source="${source}"]` : "";
+  await app.click(await app.find(`[data-testid="thumb"]${of}[data-index="${index}"]`));
   await waitUntil(
     `inspector page ${index}`,
-    `return document.querySelector('[data-testid="inspector"]')?.dataset.page === "${index}";`,
+    `const i = document.querySelector('[data-testid="inspector"]'); return i?.dataset.page === "${index}"${source ? ` && i.dataset.source === "${source}"` : ""};`,
   );
 };
+/** Pick an option of a select by its visible text, with a real click on the option. */
+const choose = async (testid, text) => {
+  const i = await q(
+    `return [...document.querySelector('[data-testid="${testid}"]').options].findIndex(o => o.textContent.trim() === arguments[0]);`,
+    text,
+  );
+  expect(i >= 0, `${testid} has no option "${text}"`);
+  await app.click(await app.find(`[data-testid="${testid}"] option:nth-child(${i + 1})`));
+  await sleep(150);
+};
+const selectLayer = async (mask) => {
+  await app.click(await app.find(`[data-testid="layer"][data-mask="${mask}"]`));
+  await app.waitFor('[data-testid="layer-editor"]');
+};
+/** Wait for the registration view to finish a fresh run after a change. */
+const registered = async () => {
+  await sleep(500);
+  await waitUntil(
+    "registration rendered",
+    `return document.querySelector('[data-testid="registration"]')?.dataset.state === "ready";`,
+    30000,
+  );
+};
+/**
+ * The overlay colour at trim-relative millimetre positions, located from the
+ * view's own render plan with the PDF.js viewport convention.
+ */
+const overlayAt = (pointsMm) =>
+  q(
+    `const root = document.querySelector('[data-testid="registration-page"]');
+    const plan = JSON.parse(root.dataset.plan), anchor = JSON.parse(root.dataset.anchor);
+    const k = Number(root.dataset.userUnit) * 25.4 / 72;
+    const ctx = document.querySelector('[data-testid="overlay"]').getContext('2d', { willReadFrequently: true });
+    const base = ([x, y]) => {
+      const [l, b, r, t] = plan.view, s = plan.pxPerUnit;
+      return plan.rotation === 0 ? [(x - l) * s, (t - y) * s] : plan.rotation === 90 ? [(y - b) * s, (x - l) * s]
+        : plan.rotation === 180 ? [(r - x) * s, (y - b) * s] : [(t - y) * s, (r - x) * s];
+    };
+    return arguments[0].map(([mx, my]) => {
+      const [dx, dy] = base([anchor[0] + mx / k, anchor[1] + my / k]);
+      const px = ctx.getImageData(Math.round(dx + plan.offsetX), Math.round(dy + plan.offsetY), 1, 1).data;
+      return px[3] === 0 ? "none" : px[0] > 200 && px[2] > 150 ? "raisedUv" : px[2] > 200 && px[0] < 60 ? "uv" : "other:" + [...px];
+    });`,
+    pointsMm,
+  );
+const registrationWarnings = () =>
+  q(
+    `return [...document.querySelectorAll('[data-testid="registration-warnings"] li')].map(li => li.dataset.code + "@" + li.dataset.layer);`,
+  );
 const distance = (p) => Math.hypot(...p);
 
 try {
@@ -221,7 +283,7 @@ try {
 
   // D1: mixed sizes and labels, identity, both readers, progressive thumbnails.
   const d1 = await pick("D1");
-  expect(d1.state === "ready", `D1: ${JSON.stringify(d1)}`);
+  expect(d1.state === "added", `D1: ${JSON.stringify(d1)}`);
   await waitUntil(
     "D1 thumbnails",
     `return document.querySelectorAll('[data-testid="thumb"][data-state="rendered"]').length === 5;`,
@@ -293,7 +355,7 @@ try {
   ok("page 2 (Letter) shows its 90° rotation", rot);
 
   // G2: an override replaces the effective box and keeps the source fact.
-  expect((await pick("G2")).state === "ready", "G2 did not open");
+  expect((await pick("G2")).state === "added", "G2 did not open");
   await waitUntil(
     "G2 boxes",
     `return document.querySelector('[data-testid="box-table"] tr[data-box="TrimBox"]')?.dataset.origin === "default";`,
@@ -318,7 +380,7 @@ try {
   ok("clearing the override restores the source fact");
 
   // G5: an invalid rotation is diagnosed and shown as invalid.
-  expect((await pick("G5")).state === "ready", "G5 did not open");
+  expect((await pick("G5")).state === "added", "G5 did not open");
   await waitUntil("G5 diagnostics", `return !!document.querySelector('[data-code="invalidRotation"]');`);
   await selectThumb(3);
   const invalid = await app.attr(await app.find('[data-testid="rotation"]'), "data-invalid");
@@ -329,7 +391,7 @@ try {
   );
 
   // O1: layers that change for printing produce a visible limitation.
-  expect((await pick("O1")).state === "ready", "O1 did not open");
+  expect((await pick("O1")).state === "added", "O1 did not open");
   await waitUntil(
     "O1 limitation",
     `return !!document.querySelector('[data-code="printLayersDiffer"][data-level="limitation"]');`,
@@ -349,7 +411,7 @@ try {
   const wrong = (await status()).text;
   await app.type(await app.find('[data-testid="password"]'), "maskora");
   await app.click(await app.find('[data-testid="password-submit"]'));
-  await app.waitFor('[data-testid="doc-status"][data-state="ready"]');
+  await app.waitFor('[data-testid="doc-status"][data-state="added"]');
   const leaked = await q(
     `const html = document.documentElement.outerHTML; return html.includes("smoke-wrong-pass") || html.includes('value="maskora"');`,
   );
@@ -360,7 +422,7 @@ try {
   const x1c = await pick("X1c");
   expect(x1c.state === "failed" && x1c.text.includes("invalidPdf"), JSON.stringify(x1c));
   ok("a file that is not a PDF fails by name", x1c.text);
-  expect((await pick("X1b")).state === "ready", "X1b did not open");
+  expect((await pick("X1b")).state === "added", "X1b did not open");
   await waitUntil(
     "X1b native failure",
     `return document.querySelector('[data-testid="geometry-status"]')?.dataset.status === "failed";`,
@@ -373,7 +435,7 @@ try {
   ok("screenshot", await app.screenshot("08-x1b-geometry-failed"));
 
   // X2a: 500 pages; thumbnails render only as they come into view.
-  expect((await pick("X2a")).state === "ready", "X2a did not open");
+  expect((await pick("X2a")).state === "added", "X2a did not open");
   await waitUntil(
     "first X2a thumbnail",
     `return document.querySelector('[data-testid="thumb"][data-index="0"]')?.dataset.state === "rendered";`,
@@ -405,7 +467,7 @@ try {
     "lighting reopened",
     `return document.querySelector('[data-section="lighting"]').dataset.open === "true";`,
   );
-  expect((await pick("D1")).state === "ready", "D1 did not reopen");
+  expect((await pick("D1")).state === "added", "D1 did not reopen");
   await app.waitFor('[data-testid="box-preview"][data-state="rendered"]');
   const sticky = await q(`
     const panel = document.querySelector('[data-testid="panel"]');
@@ -417,6 +479,192 @@ try {
   ok("a section header stays at the top while its section scrolls past", JSON.stringify(sticky));
   ok("screenshot", await app.screenshot("09-sticky-header"));
   await q(`document.querySelector('[data-testid="panel"]').scrollTop = 0;`);
+
+  // 1.2 — K1: one PDF, pages out of order, mapped to two printed pages and three finishes.
+  const k1 = JSON.parse(readFileSync(join(FIXTURES, "K1.expected.json"), "utf8"));
+  expect((await pick("K1")).state === "added", "K1 did not open");
+  await waitUntil(
+    "K1 geometry",
+    `return document.querySelector('[data-testid="geometry-status"]')?.dataset.status === "available";`,
+  );
+  for (const i of [3, 1, 4, 0, 2]) {
+    await selectThumb(i);
+    await app.click(await app.find(`[data-testid="role-${k1.mapping[i].role}"]`));
+  }
+  const roles = await q(
+    `return [...document.querySelectorAll('[data-testid="thumb"]')].map(t => t.dataset.role);`,
+  );
+  expect(JSON.stringify(roles) === JSON.stringify(k1.mapping.map((m) => m.role)), `roles ${roles}`);
+  for (const m of k1.mapping.filter((x) => x.role === "mask")) {
+    await selectLayer(`K1.pdf p. ${m.page + 1}`);
+    await choose("layer-type", m.finish === "raisedUv" ? "Raised UV" : "Ordinary UV");
+    await choose("layer-target", `K1.pdf p. ${m.target + 1}`);
+  }
+  const problems = await q(
+    `return [...document.querySelectorAll('[data-testid="layer"]')].map(l => l.dataset.problem);`,
+  );
+  expect(
+    problems.every((p) => p === ""),
+    `layers not ready: ${problems}`,
+  );
+  ok("K1: pages classified out of order; three finishes from one PDF target artwork A", roles.join(", "));
+  await app.click(await app.find('[data-testid="view-registration"]'));
+  await choose("registration-surface", "K1.pdf p. 2");
+  await registered();
+  const k1Seen = await overlayAt(k1.samples.map((s) => s.at));
+  k1.samples.forEach((s, i) => {
+    const want = s.raisedUv ? "raisedUv" : s.uv ? "uv" : "none";
+    expect(k1Seen[i] === want, `K1 at ${s.at} mm: ${k1Seen[i]}, expected ${want}`);
+  });
+  ok(
+    "K1 coverage matches at every sample; raised UV replaces ordinary UV where both cover",
+    k1Seen.join(" "),
+  );
+  const k1Warnings = await registrationWarnings();
+  expect(k1Warnings.includes("beyondTrim@K1.pdf p. 4"), `no beyond-trim warning: ${k1Warnings}`);
+  expect(
+    k1Warnings.includes("sameTypeOverlap@K1.pdf p. 4 + K1.pdf p. 5"),
+    `no overlap warning: ${k1Warnings}`,
+  );
+  ok("warnings: coverage past the trim, and two ordinary-UV masks overlapping", k1Warnings.join(", "));
+  ok("screenshot", await app.screenshot("10-k1-registration"));
+
+  // K2: artwork and masks in separate PDFs.
+  const k2 = JSON.parse(readFileSync(join(FIXTURES, "K2m.expected.json"), "utf8")).pages;
+  expect((await pick("K2a")).state === "added", "K2a did not open");
+  expect((await pick("K2m", { keep: true })).state === "added", "K2m did not open");
+  const files = await q(
+    `return [...document.querySelectorAll('[data-testid="source"]')].map(s => s.dataset.name);`,
+  );
+  expect(JSON.stringify(files) === '["K2a.pdf","K2m.pdf"]', `source list ${files}`);
+  await waitUntil(
+    "K2 geometry",
+    `return [...document.querySelectorAll('[data-testid="geometry-status"]')].every(g => g.dataset.status === "available");`,
+  );
+  await selectThumb(0, "K2a.pdf");
+  await app.click(await app.find('[data-testid="role-print"]'));
+  for (const p of [0, 1, 2, 3]) {
+    await selectThumb(p, "K2m.pdf");
+    await app.click(await app.find('[data-testid="role-mask"]'));
+  }
+  await registered();
+  const unassigned = await q(
+    `return [...document.querySelectorAll('[data-testid="layer"]')].filter(l => l.dataset.problem === "missingTarget").length;`,
+  );
+  const missing = await registrationWarnings();
+  expect(unassigned === 4 && missing.some((w) => w.startsWith("missingTarget")), `${unassigned}; ${missing}`);
+  // K1 left the project; its three layers stay, reported as having lost their mask file.
+  expect(
+    missing.some((w) => w.startsWith("missingMask")),
+    `K1 layers not reported: ${missing}`,
+  );
+  ok(
+    "separate files: the source list names both; unassigned masks are flagged as missing a target",
+    files.join(" + "),
+  );
+  const masks = [0, 1, 2, 3].map((p) => `K2m.pdf p. ${p + 1}`);
+  for (const mask of masks) {
+    await selectLayer(mask);
+    await choose("layer-target", "K2a.pdf p. 1");
+  }
+  /** Show only one mask in the overlay. */
+  const only = async (mask) => {
+    for (const m of masks) {
+      await selectLayer(m);
+      const shown = await app.attr(await app.find('[data-testid="layer-shown"]'), "checked");
+      if (Boolean(shown) !== (m === mask)) await app.click(await app.find('[data-testid="layer-shown"]'));
+    }
+    await selectLayer(mask);
+    await registered();
+  };
+  const coverageAt = async (points) => (await overlayAt(points)).map((c) => (c === "none" ? 0 : 1));
+
+  await only(masks[0]);
+  await waitUntil(
+    "alpha check",
+    `return document.querySelector('[data-testid="alpha-status"]').dataset.usable !== "null";`,
+  );
+  const opaqueAlpha = await app.attr(await app.find('[data-testid="alpha-status"]'), "data-usable");
+  const alphaDisabled = await q(
+    `return document.querySelector('[data-testid="mask-mode"] option[value="alpha"]').disabled;`,
+  );
+  expect(
+    opaqueAlpha === "false" && alphaDisabled,
+    `opaque page: alpha ${opaqueAlpha}, disabled ${alphaDisabled}`,
+  );
+  expect(
+    JSON.stringify(await coverageAt(k2[0].samples.map((s) => s.at))) ===
+      JSON.stringify(k2[0].samples.map((s) => s.coverage)),
+    "opaque mask coverage",
+  );
+  expect((await registrationWarnings()).includes("originMismatch@K2m.pdf p. 1"), "no origin warning");
+  ok(
+    "opaque mask (painted sheet, trim elsewhere): aligned by the trim, origin difference reported, alpha mode unavailable",
+  );
+
+  await only(masks[1]);
+  await choose("mask-mode", "Transparency (alpha)");
+  await registered();
+  const transparentAlpha = await app.attr(await app.find('[data-testid="alpha-status"]'), "data-usable");
+  expect(transparentAlpha === "true", "transparent page alpha not usable");
+  expect(
+    JSON.stringify(await coverageAt(k2[1].samples.map((s) => s.at))) ===
+      JSON.stringify(k2[1].samples.map((s) => s.coverage)),
+    "alpha coverage",
+  );
+  ok("transparent mask read by alpha through an app-created alpha context");
+  ok("screenshot", await app.screenshot("11-k2-alpha"));
+
+  await only(masks[2]);
+  const pts = k2[2].samples.map((s) => s.at);
+  const before = await coverageAt(pts);
+  expect(
+    JSON.stringify(before) === JSON.stringify(k2[2].samples.map((s) => s.uncorrected)),
+    `uncorrected ${before}`,
+  );
+  for (const [field, value] of [
+    ["offset-x", k2[2].correctionMm[0]],
+    ["offset-y", k2[2].correctionMm[1]],
+  ]) {
+    const el = await app.find(`[data-testid="${field}"]`);
+    await app.clear(el);
+    await app.type(el, String(value));
+  }
+  await registered();
+  const after = await coverageAt(pts);
+  expect(
+    JSON.stringify(after) === JSON.stringify(k2[2].samples.map((s) => s.corrected)),
+    `corrected ${after}`,
+  );
+  ok(
+    "misregistered mask: shifting X −1.5 mm, Y +1 mm puts every sample where the nominal shape is",
+    `${before} → ${after}`,
+  );
+  ok("screenshot", await app.screenshot("12-k2-corrected"));
+  await app.click(await app.find('[data-testid="reset-interpretation"]'));
+  await registered();
+  expect(
+    JSON.stringify(await coverageAt(pts)) === JSON.stringify(before),
+    "reset did not restore the uncorrected mask",
+  );
+  ok("reset returns the mask settings to their defaults");
+
+  const threshold = await app.find('[data-testid="mask-threshold"]');
+  await app.clear(threshold);
+  await app.type(threshold, "1.5");
+  await app.waitFor('[data-testid="refusal"][data-code="invalidThreshold"]');
+  ok(
+    "an invalid threshold is refused with its reason",
+    await app.text(await app.find('[data-testid="refusal"]')),
+  );
+  await app.clear(threshold);
+  await app.type(threshold, "0.5");
+
+  await only(masks[3]);
+  expect((await registrationWarnings()).includes("sizeMismatch@K2m.pdf p. 4"), "no size warning");
+  ok("a mask whose trim is 1 mm wider is reported as a size mismatch, not corrected");
+  await app.click(await app.find('[data-testid="view-3d"]'));
+  await clearSources();
 
   // Bypass the UI: call the IPC directly with things the user never selected.
   const refusals = await app.execAsync(`

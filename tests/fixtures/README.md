@@ -42,3 +42,18 @@ repository's own.
 - `raw` is the array as written in the file, or `null` when the page has none.
 - `effective` is the rectangle a correct reader uses, normalised to `[llx, lly, urx, ury]` in PDF user space.
 - `origin` is `explicit`, `inherited`, `default` (a format fallback) or `invalid` (present but unusable).
+
+## Mask fixtures (K1, K2a, K2m)
+
+Mask pages are stated in **trim space**: every shape is a rectangle `[x, y, width, height]` in millimetres from
+the TrimBox's lower-left corner, so registration is judged in the same terms whatever the page layout. K1 holds
+artwork and masks in one PDF, out of order; K2a and K2m are an artwork PDF and a separate mask PDF whose pages
+are opaque (trim placed elsewhere on a larger sheet), transparent, drawn 1.5 mm right and 1 mm down of their
+nominal place, and 1 mm too wide. `samples` give the coverage expected at trim-relative points, at least 0.4 mm
+from any edge.
+
+## Model fixtures
+
+`model/` holds project data as a project file may contain it, rather than PDFs. `mask-sources.json` lists stored
+mask sources with the outcome each must have: supported kinds parse, future and unknown kinds are kept verbatim as
+unsupported, and malformed entries are refused.

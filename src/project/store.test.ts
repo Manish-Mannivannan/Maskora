@@ -55,110 +55,135 @@ const report = (pages: number, engine = "native"): GeometryReport => ({
   })),
 });
 
-/** Deps whose every call is answered by the test, in order. */
+/** Deps whose every call is answered by the test, call by call. */
 function scriptedDeps() {
   const selections: SourceInfo[] = [];
-  const geometry = new Map<string, ReturnType<typeof deferred<GeometryReport>>>();
-  const pdf = new Map<string, ReturnType<typeof deferred<PdfSession>>>();
+  const geometry: ReturnType<typeof deferred<GeometryReport>>[] = [];
+  const pdf: ReturnType<typeof deferred<PdfSession>>[] = [];
   const passwords: (string | undefined)[] = [];
+  let ids = 0;
   const deps: ProjectDeps = {
     selectSource: async () => selections.shift() ?? null,
     readSource: async (handle) => new TextEncoder().encode(handle),
     digest: async () => "digest",
-    inspectGeometry: (handle, password) => {
+    inspectGeometry: (_handle, password) => {
       passwords.push(password);
       const d = deferred<GeometryReport>();
-      geometry.set(handle, d);
+      geometry.push(d);
       return d.promise;
     },
-    openPdf: (bytes) => {
+    openPdf: () => {
       const d = deferred<PdfSession>();
-      pdf.set(new TextDecoder().decode(bytes), d);
+      pdf.push(d);
       return d.promise;
     },
+    newId: () => `id${(ids += 1)}`,
   };
   return { deps, selections, geometry, pdf, passwords };
 }
 
+/** Add one source whose PDF.js open succeeds with `pages` pages. */
+async function add(store: ProjectStore, s: ReturnType<typeof scriptedDeps>, name: string, pages = 1) {
+  s.selections.push(info(name));
+  const adding = store.addSource();
+  await flush();
+  s.pdf.at(-1)!.resolve(session(pages));
+  await adding;
+  await flush();
+  return store.getState().sources.at(-1)!;
+}
+
 describe("project store", () => {
-  it("opens a source and fills its facts as each reader finishes", async () => {
+  it("adds sources and fills their facts as each reader finishes", async () => {
     const s = scriptedDeps();
     const store = new ProjectStore(s.deps, "p1");
-    s.selections.push(info("a.pdf"));
-    const opening = store.open();
-    await flush();
-    expect(store.getState().load).toMatchObject({ kind: "loading", name: "a.pdf", step: "parsing" });
-    s.pdf.get("h-a.pdf")!.resolve(session(2));
-    await opening;
-    await flush();
-    const source = store.getState().source!;
-    expect(store.getState().load.kind).toBe("ready");
-    expect(source.pageCount).toBe(2);
-    expect(source.geometry.status).toBe("running");
-    expect(source.labels.status).toBe("absent");
-    expect(source.metadata.status).toBe("notRequested");
-    s.geometry.get("h-a.pdf")!.resolve(report(2));
-    await flush();
-    expect(store.getState().source!.geometry).toMatchObject({
-      status: "available",
-      provenance: { engine: "native", sourceRevision: source.revision },
+    const a = await add(store, s, "art.pdf", 2);
+    expect(store.getState().load).toEqual({ kind: "added", name: "art.pdf" });
+    expect(a).toMatchObject({
+      name: "art.pdf",
+      pageCount: 2,
+      labels: { status: "absent" },
+      metadata: { status: "notRequested" },
     });
-    expect(store.getState().source!.diagnostics).toEqual([]);
+    expect(a.geometry.status).toBe("running");
+    s.geometry[0].resolve(report(2));
+    await flush();
+    expect(store.source(a.id)!.geometry).toMatchObject({
+      status: "available",
+      provenance: { engine: "native", sourceRevision: a.revision },
+    });
+    const b = await add(store, s, "masks.pdf", 4);
+    expect(store.getState().sources.map((x) => x.name)).toEqual(["art.pdf", "masks.pdf"]);
+    expect(store.getState().selected).toEqual({ sourceId: b.id, page: 0 });
   });
 
-  it("drops a late native result for a replaced source (delayed-job source switch)", async () => {
+  it("drops a late native result for a removed source, even when the same file is added again (delayed-job switch)", async () => {
+    const s = scriptedDeps();
+    const store = new ProjectStore(s.deps, "p1");
+    const first = await add(store, s, "a.pdf");
+    store.removeSource(first.id);
+    const again = await add(store, s, "a.pdf");
+    s.geometry[0].resolve(report(1, "late, for the removed copy"));
+    await flush();
+    expect(store.getState().sources).toHaveLength(1);
+    expect(store.source(again.id)!.geometry.status).toBe("running");
+    s.geometry[1].resolve(report(1, "current"));
+    await flush();
+    expect(store.source(again.id)!.geometry).toMatchObject({
+      status: "available",
+      value: { engine: "current" },
+    });
+    expect(again.revision).not.toBe(first.revision);
+  });
+
+  it("a second choice supersedes a file still loading; the first is closed, never added", async () => {
     const s = scriptedDeps();
     const store = new ProjectStore(s.deps, "p1");
     s.selections.push(info("a.pdf"), info("b.pdf"));
-    const a = store.open();
+    const a = store.addSource();
     await flush();
-    s.pdf.get("h-a.pdf")!.resolve(session(1));
-    await a;
-    const b = store.open();
+    const b = store.addSource();
     await flush();
-    s.pdf.get("h-b.pdf")!.resolve(session(3));
-    await b;
-    s.geometry.get("h-a.pdf")!.resolve(report(1, "late A"));
-    await flush();
-    const source = store.getState().source!;
-    expect(source.name).toBe("b.pdf");
-    expect(source.geometry.status).toBe("running");
-    s.geometry.get("h-b.pdf")!.resolve(report(3, "B"));
-    await flush();
-    expect(store.getState().source!.geometry).toMatchObject({ status: "available", value: { engine: "B" } });
-  });
-
-  it("closes, and never shows, a PDF.js document that finishes after its source was replaced", async () => {
-    const s = scriptedDeps();
-    const store = new ProjectStore(s.deps, "p1");
-    s.selections.push(info("a.pdf"), info("b.pdf"));
-    const a = store.open();
-    await flush();
-    expect(store.getState().load).toMatchObject({ kind: "loading", name: "a.pdf" });
-    const b = store.open(); // replaces a.pdf while it is still loading
-    await flush();
-    s.pdf.get("h-b.pdf")!.resolve(session(2));
+    s.pdf[1].resolve(session(2));
     await b;
     const lateA = session(9);
-    s.pdf.get("h-a.pdf")!.resolve(lateA);
+    s.pdf[0].resolve(lateA);
     await a;
     expect(lateA.close).toHaveBeenCalled();
-    expect(store.getState().source).toMatchObject({ name: "b.pdf", pageCount: 2 });
+    expect(store.getState().sources.map((x) => x.name)).toEqual(["b.pdf"]);
   });
 
   it("a cancelled load shows as cancelled and its late result is discarded", async () => {
     const s = scriptedDeps();
     const store = new ProjectStore(s.deps, "p1");
     s.selections.push(info("a.pdf"));
-    const a = store.open();
+    const a = store.addSource();
     await flush();
     store.cancelLoad();
-    expect(store.getState().load).toEqual({ kind: "cancelled", kept: false });
+    expect(store.getState().load).toEqual({ kind: "cancelled" });
     const late = session(1);
-    s.pdf.get("h-a.pdf")!.resolve(late);
+    s.pdf[0].resolve(late);
     await a;
     expect(late.close).toHaveBeenCalled();
-    expect(store.getState().source).toBeNull();
+    expect(store.getState().sources).toEqual([]);
+  });
+
+  it("removing a source closes its PDF.js document and ignores its late facts", async () => {
+    const s = scriptedDeps();
+    const store = new ProjectStore(s.deps, "p1");
+    s.selections.push(info("a.pdf"));
+    const adding = store.addSource();
+    await flush();
+    const opened = session(1);
+    s.pdf[0].resolve(opened);
+    await adding;
+    const a = store.getState().sources[0];
+    store.removeSource(a.id);
+    expect(opened.close).toHaveBeenCalled();
+    expect(store.session(a.id, a.revision)).toBeNull();
+    s.geometry[0].resolve(report(1));
+    await flush();
+    expect(store.getState().sources).toEqual([]);
   });
 
   it("keeps two project instances independent", async () => {
@@ -166,18 +191,12 @@ describe("project store", () => {
     const s2 = scriptedDeps();
     const one = new ProjectStore(s1.deps, "p1");
     const two = new ProjectStore(s2.deps, "p2");
-    s1.selections.push(info("a.pdf"));
-    s2.selections.push(info("b.pdf"));
-    const o1 = one.open();
-    const o2 = two.open();
-    await flush();
-    s1.pdf.get("h-a.pdf")!.resolve(session(1));
-    s2.pdf.get("h-b.pdf")!.resolve(session(2));
-    await Promise.all([o1, o2]);
-    one.selectPage(0);
-    two.selectPage(1);
-    expect([one.getState().source!.name, two.getState().source!.name]).toEqual(["a.pdf", "b.pdf"]);
-    expect([one.getState().selectedPage, two.getState().selectedPage]).toEqual([0, 1]);
+    const a = await add(one, s1, "a.pdf", 1);
+    const b = await add(two, s2, "b.pdf", 2);
+    two.selectPage({ sourceId: b.id, page: 1 });
+    expect([one.getState().sources[0].name, two.getState().sources[0].name]).toEqual(["a.pdf", "b.pdf"]);
+    expect(one.getState().selected).toEqual({ sourceId: a.id, page: 0 });
+    expect(two.getState().selected).toEqual({ sourceId: b.id, page: 1 });
     expect(one.id).not.toBe(two.id);
   });
 
@@ -185,40 +204,34 @@ describe("project store", () => {
     const s = scriptedDeps();
     const store = new ProjectStore(s.deps, "p1");
     s.selections.push(info("e.pdf"));
-    const open = store.open();
+    const open = store.addSource();
     await flush();
-    s.pdf
-      .get("h-e.pdf")!
-      .reject({ code: "passwordNeeded", message: "This document needs a password to open." });
+    s.pdf[0].reject({ code: "passwordNeeded", message: "This document needs a password to open." });
     await open;
     expect(store.getState().load).toMatchObject({ kind: "password", attempt: "needed" });
 
     const wrong = store.submitPassword("wrong-secret");
     await flush();
-    s.pdf.get("h-e.pdf")!.reject({ code: "passwordWrong", message: "The password is not correct." });
+    s.pdf[1].reject({ code: "passwordWrong", message: "The password is not correct." });
     await wrong;
     expect(store.getState().load).toMatchObject({ kind: "password", attempt: "wrong" });
 
     const right = store.submitPassword("right-secret");
     await flush();
-    s.pdf.get("h-e.pdf")!.resolve(session(1));
+    s.pdf[2].resolve(session(1));
     await right;
-    expect(store.getState().load.kind).toBe("ready");
+    expect(store.getState().load.kind).toBe("added");
     expect(s.passwords).toEqual([undefined, "wrong-secret", "right-secret"]);
     expect(JSON.stringify(store.getState())).not.toMatch(/secret/);
   });
 
-  it("a cancelled dialog keeps the open document; a read failure is named", async () => {
+  it("a cancelled dialog keeps the project; a read failure is named", async () => {
     const s = scriptedDeps();
     const store = new ProjectStore(s.deps, "p1");
-    s.selections.push(info("a.pdf"));
-    const a = store.open();
-    await flush();
-    s.pdf.get("h-a.pdf")!.resolve(session(1));
-    await a;
-    await store.open(); // no selection queued: cancelled
-    expect(store.getState().load).toEqual({ kind: "cancelled", kept: true });
-    expect(store.getState().source?.name).toBe("a.pdf");
+    await add(store, s, "a.pdf");
+    await store.addSource(); // no selection queued: cancelled
+    expect(store.getState().load).toEqual({ kind: "cancelled" });
+    expect(store.getState().sources.map((x) => x.name)).toEqual(["a.pdf"]);
 
     const failing = new ProjectStore(
       {
@@ -228,29 +241,42 @@ describe("project store", () => {
       },
       "p2",
     );
-    await failing.open();
+    await failing.addSource();
     expect(failing.getState().load).toMatchObject({ kind: "failed", code: "sourceMissing" });
   });
 
   it("reads document information only when asked", async () => {
     const s = scriptedDeps();
     const store = new ProjectStore(s.deps, "p1");
-    s.selections.push(info("a.pdf"));
-    const a = store.open();
+    const a = await add(store, s, "a.pdf");
+    expect(store.source(a.id)!.metadata.status).toBe("notRequested");
+    store.requestMetadata(a.id);
+    expect(store.source(a.id)!.metadata.status).toBe("running");
     await flush();
-    s.pdf.get("h-a.pdf")!.resolve(session(1));
-    await a;
-    expect(store.getState().source!.metadata.status).toBe("notRequested");
-    store.requestMetadata();
-    expect(store.getState().source!.metadata.status).toBe("running");
-    await flush();
-    expect(store.getState().source!.metadata.status).toBe("available");
+    expect(store.source(a.id)!.metadata.status).toBe("available");
   });
 
-  it("sets and clears overrides per page", () => {
-    const store = new ProjectStore(scriptedDeps().deps, "p1");
-    store.setOverride([0, 1], { trim: { rect: [1, 1, 9, 9], derivation: "test" } });
-    store.setOverride([1], { trim: undefined });
-    expect(Object.keys(store.getState().overrides)).toEqual(["0"]);
+  it("maps pages across two files, refuses an invalid target, and forgets a removed source's intent", async () => {
+    const s = scriptedDeps();
+    const store = new ProjectStore(s.deps, "p1");
+    const art = await add(store, s, "art.pdf", 1);
+    const masks = await add(store, s, "masks.pdf", 2);
+    store.setRole({ sourceId: art.id, page: 0 }, "print");
+    store.setRole({ sourceId: masks.id, page: 1 }, "mask");
+    const { surfaces, layers } = store.getState().model;
+    expect(store.assignTarget(layers[0].id, "not-a-surface")).toBe(false);
+    expect(store.getState().lastRefusal?.code).toBe("unknownSurface");
+    expect(store.assignTarget(layers[0].id, surfaces[0].id)).toBe(true);
+    expect(store.getState().lastRefusal).toBeNull();
+    expect(store.getState().model.layers[0]).toMatchObject({
+      mask: { kind: "pdfPage", sourceId: masks.id, page: 1 },
+      target: surfaces[0].id,
+    });
+    store.setOverride([{ sourceId: art.id, page: 0 }], { trim: { rect: [1, 1, 9, 9], derivation: "test" } });
+    store.removeSource(art.id);
+    const after = store.getState();
+    expect(after.model.surfaces).toEqual([]);
+    expect(after.model.layers[0].target).toBeNull();
+    expect(after.overrides).toEqual({});
   });
 });

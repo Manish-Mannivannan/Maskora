@@ -706,6 +706,153 @@ const D1 = () => {
   };
 };
 
+// ---------------------------------------------------------------------------
+// Mask mapping and registration (step 1.2)
+// ---------------------------------------------------------------------------
+
+/** Millimetres to points, rounded to the writer's 4 decimals. */
+const pt = (mm) => Math.round(((mm * 72) / 25.4) * 10000) / 10000;
+
+/**
+ * A page with a 100 × 150 mm trim. `trimAt` is the trim's lower-left corner in
+ * mm from the MediaBox origin; the MediaBox is the trim plus `margin` mm on
+ * every side, extended to fit `trimAt`. The BleedBox is stated as 3 mm around
+ * the trim. Shapes are rectangles in mm relative to the trim's lower-left
+ * corner, so registration is judged in trim space whatever the page layout.
+ */
+function maskPage({ trimMm = [100, 150], trimAt = [3, 3], shapes = [], background, color = [0, 0, 0] } = {}) {
+  const [tw, th] = trimMm;
+  const [ox, oy] = trimAt;
+  const media = [0, 0, pt(ox + tw + 3), pt(oy + th + 3)];
+  const toPt = ([x, y, w, h]) => [pt(ox + x), pt(oy + y), pt(w), pt(h)];
+  return {
+    dict: {
+      MediaBox: media,
+      BleedBox: [pt(ox - 3), pt(oy - 3), pt(ox + tw + 3), pt(oy + th + 3)],
+      TrimBox: [pt(ox), pt(oy), pt(ox + tw), pt(oy + th)],
+    },
+    content:
+      (background ? fill([0, 0, media[2], media[3]], background) : "") +
+      shapes.map((s) => fill(toPt(s), color)).join(""),
+  };
+}
+
+/** Artwork: a pale full-bleed tint, an asymmetric "F" and a corner block, so orientation is visible. */
+const artworkPage = (tint) => {
+  const page = maskPage({ background: tint });
+  page.content += fill([pt(13), pt(118), pt(8), pt(30)], [0.15, 0.15, 0.2]);
+  page.content += fill([pt(13), pt(140), pt(26), pt(8)], [0.15, 0.15, 0.2]);
+  page.content += fill([pt(13), pt(127), pt(18), pt(7)], [0.15, 0.15, 0.2]);
+  page.content += fill([pt(85), pt(8), pt(14), pt(14)], [0.8, 0.25, 0.2]);
+  return page;
+};
+
+const K1 = () => {
+  const raised = [10, 20, 30, 15];
+  const uvA = [25, 25, 30, 20];
+  const uvStripe = [90, 60, 13, 5];
+  const uvB = [45, 40, 20, 20];
+  return {
+    pdf: makeDoc({
+      pages: [
+        maskPage({ shapes: [raised] }),
+        artworkPage([0.98, 0.94, 0.8]),
+        artworkPage([0.82, 0.9, 0.98]),
+        maskPage({ shapes: [uvA, uvStripe] }),
+        maskPage({ shapes: [uvB] }),
+      ],
+    }),
+    expected: {
+      description:
+        "One PDF, pages out of order: raised-UV mask, artwork A, artwork B, ordinary-UV mask (with a stripe past the trim), a second ordinary-UV mask overlapping the first",
+      trimMm: [100, 150],
+      mapping: [
+        { page: 0, role: "mask", finish: "raisedUv", target: 1 },
+        { page: 1, role: "print" },
+        { page: 2, role: "print" },
+        { page: 3, role: "mask", finish: "uv", target: 1 },
+        { page: 4, role: "mask", finish: "uv", target: 1 },
+      ],
+      shapesMm: { 0: [raised], 3: [uvA, uvStripe], 4: [uvB] },
+      // Trim-relative mm on artwork A, all three layers enabled. Raised UV replaces ordinary UV where both cover.
+      samples: [
+        { at: [15, 30], uv: 0, raisedUv: 1 },
+        { at: [30, 30], uv: 0, raisedUv: 1 },
+        { at: [45, 30], uv: 1, raisedUv: 0 },
+        { at: [50, 42], uv: 1, raisedUv: 0 },
+        { at: [60, 50], uv: 1, raisedUv: 0 },
+        { at: [80, 120], uv: 0, raisedUv: 0 },
+      ],
+      warnings: { beyondTrim: [3], sameTypeOverlap: [[3, 4]] },
+    },
+  };
+};
+
+const K2a = () => ({
+  pdf: makeDoc({ pages: [artworkPage([0.95, 0.88, 0.95])] }),
+  expected: {
+    description: "Artwork alone: one page, 100 × 150 mm trim with 3 mm bleed; its masks are in K2m",
+    trimMm: [100, 150],
+  },
+});
+
+const K2m = () => {
+  const misregistered = { nominal: [20, 100, 30, 15], shift: [1.5, -1.0] };
+  const drawn = [20 + 1.5, 100 - 1.0, 30, 15];
+  return {
+    pdf: makeDoc({
+      pages: [
+        maskPage({ trimAt: [13, 13], background: [1, 1, 1], shapes: [[20, 30, 30, 10]] }),
+        maskPage({ shapes: [[60, 40, 20, 20]] }),
+        maskPage({ shapes: [drawn] }),
+        maskPage({ trimMm: [101, 150], shapes: [[20, 30, 30, 10]] }),
+      ],
+    }),
+    expected: {
+      description:
+        "Masks for K2a in a separate file: an opaque page whose trim sits elsewhere on a larger sheet, a transparent page, a page drawn 1.5 mm right and 1 mm down of its nominal place, and a page whose trim is 1 mm too wide",
+      pages: [
+        {
+          page: 0,
+          shapesMm: [[20, 30, 30, 10]],
+          alphaUsable: false,
+          warnings: ["originMismatch"],
+          samples: [
+            { at: [35, 35], coverage: 1 },
+            { at: [35, 45], coverage: 0 },
+          ],
+        },
+        {
+          page: 1,
+          shapesMm: [[60, 40, 20, 20]],
+          alphaUsable: true,
+          warnings: [],
+          samples: [
+            { at: [70, 50], coverage: 1 },
+            { at: [50, 50], coverage: 0 },
+          ],
+        },
+        {
+          page: 2,
+          shapesMm: [misregistered.nominal],
+          drawnMm: [drawn],
+          correctionMm: [-1.5, 1.0],
+          alphaUsable: true,
+          warnings: [],
+          // Without correction the shape spans x 21.5–51.5, y 99–114; corrected, x 20–50, y 100–115.
+          samples: [
+            { at: [20.7, 107], uncorrected: 0, corrected: 1 },
+            { at: [35, 99.4], uncorrected: 1, corrected: 0 },
+            { at: [50.8, 107], uncorrected: 1, corrected: 0 },
+            { at: [35, 114.6], uncorrected: 0, corrected: 1 },
+          ],
+        },
+        { page: 3, shapesMm: [[20, 30, 30, 10]], alphaUsable: true, warnings: ["sizeMismatch"] },
+      ],
+    },
+  };
+};
+
 export const CORPUS = {
   G3,
   G4,
@@ -729,4 +876,7 @@ export const CORPUS = {
   E1a,
   E1b,
   D1,
+  K1,
+  K2a,
+  K2m,
 };

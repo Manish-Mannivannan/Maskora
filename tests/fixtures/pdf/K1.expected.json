@@ -1,0 +1,129 @@
+{
+  "fixture": "K1",
+  "description": "One PDF, pages out of order: raised-UV mask, artwork A, artwork B, ordinary-UV mask (with a stripe past the trim), a second ordinary-UV mask overlapping the first",
+  "trimMm": [
+    100,
+    150
+  ],
+  "mapping": [
+    {
+      "page": 0,
+      "role": "mask",
+      "finish": "raisedUv",
+      "target": 1
+    },
+    {
+      "page": 1,
+      "role": "print"
+    },
+    {
+      "page": 2,
+      "role": "print"
+    },
+    {
+      "page": 3,
+      "role": "mask",
+      "finish": "uv",
+      "target": 1
+    },
+    {
+      "page": 4,
+      "role": "mask",
+      "finish": "uv",
+      "target": 1
+    }
+  ],
+  "shapesMm": {
+    "0": [
+      [
+        10,
+        20,
+        30,
+        15
+      ]
+    ],
+    "3": [
+      [
+        25,
+        25,
+        30,
+        20
+      ],
+      [
+        90,
+        60,
+        13,
+        5
+      ]
+    ],
+    "4": [
+      [
+        45,
+        40,
+        20,
+        20
+      ]
+    ]
+  },
+  "samples": [
+    {
+      "at": [
+        15,
+        30
+      ],
+      "uv": 0,
+      "raisedUv": 1
+    },
+    {
+      "at": [
+        30,
+        30
+      ],
+      "uv": 0,
+      "raisedUv": 1
+    },
+    {
+      "at": [
+        45,
+        30
+      ],
+      "uv": 1,
+      "raisedUv": 0
+    },
+    {
+      "at": [
+        50,
+        42
+      ],
+      "uv": 1,
+      "raisedUv": 0
+    },
+    {
+      "at": [
+        60,
+        50
+      ],
+      "uv": 1,
+      "raisedUv": 0
+    },
+    {
+      "at": [
+        80,
+        120
+      ],
+      "uv": 0,
+      "raisedUv": 0
+    }
+  ],
+  "warnings": {
+    "beyondTrim": [
+      3
+    ],
+    "sameTypeOverlap": [
+      [
+        3,
+        4
+      ]
+    ]
+  }
+}

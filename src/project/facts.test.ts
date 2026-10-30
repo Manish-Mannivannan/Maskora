@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { PDFDocumentProxy } from "pdfjs-dist/types/src/display/api";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
   classifyOpenError,
   parsePdfDate,
@@ -21,8 +21,13 @@ import { BOX_NAMES, diagnose, insetBy, outsetBy, summarizePage } from "./facts";
 const DIR = join(__dirname, "../../tests/fixtures/pdf");
 const expected = (id: string) => JSON.parse(readFileSync(join(DIR, `${id}.expected.json`), "utf8"));
 
+let pdfjs: typeof import("pdfjs-dist/legacy/build/pdf.mjs");
+// Loading PDF.js's Node build is slow when every test file starts at once; pay it once, outside any test.
+beforeAll(async () => {
+  pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+}, 60000);
+
 async function open(id: string, password?: string): Promise<PDFDocumentProxy> {
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const data = new Uint8Array(readFileSync(join(DIR, `${id}.pdf`)));
   return pdfjs.getDocument({ data, password, verbosity: 0 }).promise as unknown as Promise<PDFDocumentProxy>;
 }

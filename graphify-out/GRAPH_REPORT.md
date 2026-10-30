@@ -1,16 +1,16 @@
 # Graph Report - Maskora  (2026-10-30)
 
 ## Corpus Check
-- 88 files · ~39,369 words
+- 100 files · ~51,941 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 682 nodes · 1212 edges · 37 communities (30 shown, 7 thin omitted)
-- Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 44 edges (avg confidence: 0.83)
+- 808 nodes · 1595 edges · 40 communities (33 shown, 7 thin omitted)
+- Extraction: 97% EXTRACTED · 3% INFERRED · 0% AMBIGUOUS · INFERRED: 51 edges (avg confidence: 0.83)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `e6b17f75`
+- Built from commit: `3e4c5dab`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -29,7 +29,7 @@
 - maskora
 - check-versions.mjs
 - smoke.mjs
-- store.ts
+- ProjectStore
 - prefix-graphify-vault.mjs
 - check-secrets.mjs
 - check-adr-references.mjs
@@ -38,41 +38,44 @@
 - pre-commit
 - pre-push
 - next.config.ts
-- Workspace.tsx
+- Viewport.tsx
 - sources.rs
 - csp
 - copy-pdfjs.mjs
-- facts.ts
+- pipeline.ts
 - adapter.ts
+- PageInspector.tsx
+- model.ts
+- Section.tsx
 
 ## God Nodes (most connected - your core abstractions)
-1. `makeDoc()` - 28 edges
-2. `ProjectStore` - 21 edges
-3. `scripts` - 20 edges
-4. `compilerOptions` - 19 edges
-5. `useProject()` - 16 edges
-6. `inspect()` - 14 edges
-7. `page_geometry()` - 12 edges
-8. `csp` - 12 edges
-9. `PdfSession` - 12 edges
-10. `openSession()` - 12 edges
+1. `ProjectStore` - 34 edges
+2. `makeDoc()` - 31 edges
+3. `useProject()` - 25 edges
+4. `scripts` - 20 edges
+5. `compilerOptions` - 19 edges
+6. `usePageSummaries()` - 18 edges
+7. `pageKey()` - 16 edges
+8. `inspect()` - 14 edges
+9. `runRegistration()` - 14 edges
+10. `fill()` - 14 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `PagesSummary()` --calls--> `useProject()`  [EXTRACTED]
-  src/features/workspace/Workspace.tsx → src/project/ProjectContext.tsx
 - `inspect_geometry()` --references--> `SourceRegistry`  [EXTRACTED]
   src-tauri/src/geometry.rs → src-tauri/src/sources.rs
-- `PasswordForm()` --calls--> `useProject()`  [EXTRACTED]
-  src/features/document/DocumentSection.tsx → src/project/ProjectContext.tsx
-- `DocumentDetails()` --calls--> `useProject()`  [EXTRACTED]
-  src/features/document/DocumentSection.tsx → src/project/ProjectContext.tsx
-- `PdfPageFacts` --references--> `Rect`  [EXTRACTED]
-  src/pdf/adapter.ts → src/pdf/transform.ts
+- `BoxPreview()` --calls--> `toDevice()`  [EXTRACTED]
+  src/features/document/PageInspector.tsx → src/pdf/transform.ts
+- `BoxTable()` --calls--> `sizeMm()`  [EXTRACTED]
+  src/features/document/PageInspector.tsx → src/pdf/transform.ts
+- `Overrides()` --calls--> `insetBy()`  [EXTRACTED]
+  src/features/document/PageInspector.tsx → src/project/facts.ts
+- `PageRoleControls()` --calls--> `surfaceFor()`  [EXTRACTED]
+  src/features/document/PageInspector.tsx → src/project/model.ts
 
 ## Import Cycles
 - None detected.
 
-## Communities (37 total, 7 thin omitted)
+## Communities (40 total, 7 thin omitted)
 
 ### Community 0 - "sync-plan-issues.mjs"
 Cohesion: 0.09
@@ -99,8 +102,8 @@ Cohesion: 0.20
 Nodes (9): allow-inspect-geometry, allow-read-source, allow-select-source, main, description, identifier, permissions, $schema (+1 more)
 
 ### Community 6 - "corpus.mjs"
-Cohesion: 0.09
-Nodes (49): A1(), baseline(), box(), CORPUS, coverageLayout(), D1(), defaulted(), E1a() (+41 more)
+Cohesion: 0.08
+Nodes (55): A1(), artworkPage(), baseline(), box(), CORPUS, coverageLayout(), D1(), defaulted() (+47 more)
 
 ### Community 7 - "AGENTS.md — Instructions for coding agents"
 Cohesion: 0.17
@@ -111,8 +114,8 @@ Cohesion: 0.56
 Nodes (8): fileKey(), md5(), ownerEntry(), PAD, padded(), rc4(), standardSecurity(), userEntry()
 
 ### Community 10 - "Maskora"
-Cohesion: 0.10
-Nodes (18): Build, Check, Codebase map, Fixtures, Maskora, Plan mirror, Prerequisites, Run (+10 more)
+Cohesion: 0.09
+Nodes (20): Build, Check, Codebase map, Fixtures, Maskora, Plan mirror, Prerequisites, Run (+12 more)
 
 ### Community 15 - "check-versions.mjs"
 Cohesion: 0.18
@@ -120,11 +123,11 @@ Nodes (7): cargoLock, declared, npmRows, pkg, problems, root, versionsMd
 
 ### Community 16 - "smoke.mjs"
 Cohesion: 0.07
-Nodes (25): FIXTURES, known(), OUT, report, run, same(), boxOrigins(), diagnostics() (+17 more)
+Nodes (31): FIXTURES, known(), OUT, report, run, same(), boxOrigins(), choose() (+23 more)
 
-### Community 17 - "store.ts"
-Cohesion: 0.06
-Nodes (30): GeometryReport, inspectGeometry(), PageGeometry, readSource(), selectSource(), SourceError, SourceInfo, DocMetadata (+22 more)
+### Community 17 - "ProjectStore"
+Cohesion: 0.07
+Nodes (11): SourceInfo, PdfSession, codeOf(), ProjectDeps, ProjectStore, add(), deferred(), flush() (+3 more)
 
 ### Community 18 - "prefix-graphify-vault.mjs"
 Cohesion: 0.25
@@ -138,9 +141,9 @@ Nodes (3): findings, repoRoot, TOKEN_PATTERNS
 Cohesion: 0.40
 Nodes (3): GENERATED, repoRoot, violations
 
-### Community 27 - "Workspace.tsx"
-Cohesion: 0.09
-Nodes (30): clampPanelWidth(), PANEL_DEFAULT, PANEL_KEY_STEP, PANEL_MAX, PANEL_MIN, key(), listeners, memory (+22 more)
+### Community 27 - "Viewport.tsx"
+Cohesion: 0.18
+Nodes (14): Viewport, DRAG_DEGREES_PER_PIXEL, dragLight(), ELEVATION_MAX, ELEVATION_MIN, LightAngles, lightDirection(), normalizeAngles() (+6 more)
 
 ### Community 30 - "sources.rs"
 Cohesion: 0.16
@@ -154,30 +157,42 @@ Nodes (42): icons/128x128@2x.png, icons/128x128.png, icons/32x32.png, icons/icon
 Cohesion: 0.40
 Nodes (4): dest, root, src, { version }
 
-### Community 35 - "facts.ts"
-Cohesion: 0.08
-Nodes (51): CapabilityText(), DocumentDetails(), DocumentSection(), PasswordForm(), statusText(), bytesText(), mm(), noSizeText() (+43 more)
+### Community 35 - "pipeline.ts"
+Cohesion: 0.07
+Nodes (54): alphaVaries(), boxBlur(), compose(), coverageFromPixels(), coveredOutside(), FinishMaps, LayerCoverage, luma() (+46 more)
 
 ### Community 36 - "adapter.ts"
 Cohesion: 0.08
-Nodes (29): classifyOpenError(), createLimiter(), INFO_FIELDS, MetadataField, openSession(), parsePdfDate(), PdfOpenError, PdfOpenErrorCode (+21 more)
+Nodes (28): classifyOpenError(), createLimiter(), INFO_FIELDS, MetadataField, openSession(), parsePdfDate(), PdfOpenError, PdfOpenErrorCode (+20 more)
+
+### Community 37 - "PageInspector.tsx"
+Cohesion: 0.06
+Nodes (77): bytesText(), mm(), noSizeText(), ORIGIN_TEXT, sizeText(), BoxPreview(), BoxTable(), OUTLINE (+69 more)
+
+### Community 38 - "model.ts"
+Cohesion: 0.10
+Nodes (34): LayerInput, BoxName, addLayer(), assignTarget(), DEFAULT_INTERPRETATION, EMPTY_MODEL, FINISH_TYPES, FinishLayer (+26 more)
+
+### Community 39 - "Section.tsx"
+Cohesion: 0.43
+Nodes (7): key(), listeners, memory, read(), Section(), subscribe(), write()
 
 ## Knowledge Gaps
-- **224 isolated node(s):** `printWidth`, `endOfLine`, `nextConfig`, `name`, `private` (+219 more)
+- **238 isolated node(s):** `printWidth`, `endOfLine`, `nextConfig`, `name`, `private` (+233 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **7 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `PdfSession` connect `store.ts` to `adapter.ts`?**
-  _High betweenness centrality (0.006) - this node is a cross-community bridge._
-- **Why does `SourceRegistry` connect `sources.rs` to `geometry.rs`?**
-  _High betweenness centrality (0.005) - this node is a cross-community bridge._
+- **Why does `ProjectStore` connect `ProjectStore` to `PageInspector.tsx`?**
+  _High betweenness centrality (0.025) - this node is a cross-community bridge._
+- **Why does `PdfSession` connect `ProjectStore` to `pipeline.ts`, `adapter.ts`, `PageInspector.tsx`?**
+  _High betweenness centrality (0.007) - this node is a cross-community bridge._
 - **Are the 3 inferred relationships involving `makeDoc()` (e.g. with `.add()` and `.build()`) actually correct?**
   _`makeDoc()` has 3 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `printWidth`, `endOfLine`, `nextConfig` to the rest of the system?**
-  _224 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _238 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `sync-plan-issues.mjs` be split into smaller, more focused modules?**
   _Cohesion score 0.09090909090909091 - nodes in this community are weakly interconnected._
 - **Should `compilerOptions` be split into smaller, more focused modules?**

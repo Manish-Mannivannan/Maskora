@@ -15,8 +15,8 @@
   "13": "main.rs",
   "14": "maskora",
   "15": "check-versions.mjs",
-  "16": "probe-pdf.mjs",
-  "17": "dependencies",
+  "16": "smoke.mjs",
+  "17": "store.ts",
   "18": "prefix-graphify-vault.mjs",
   "19": "check-secrets.mjs",
   "20": "check-adr-references.mjs",
@@ -33,5 +33,7 @@
   "31": "csp",
   "32": "copy-pdfjs.mjs",
   "33": "pdfjs-dist",
-  "34": "dialog.ps1"
+  "34": "dialog.ps1",
+  "35": "facts.ts",
+  "36": "adapter.ts"
 }

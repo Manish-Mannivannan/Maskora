@@ -1,18 +1,23 @@
 /**
- * One open project's document state (architecture §4.5, §7.1).
+ * One open project (architecture §4.5, §7.1, §8.1).
  *
  * A store is a project instance, never a global: everything it holds and
  * every job it starts belongs to it, so a later tabbed workspace can hold
- * several without a rewrite. Each opened source gets a new revision, and
- * every asynchronous result is checked against the current revision before
- * it is applied; a late result for a replaced source is dropped (and a late
- * PDF.js document closed), never shown. The native geometry reader cannot be
- * interrupted, so its stale results are discarded the same way.
+ * several without a rewrite. A project has any number of source PDFs: artwork
+ * and masks may share one file or come from separate ones.
  *
- * A password is passed to both readers for one attempt and not kept: it is
- * never part of the state snapshot, a log or an error.
+ * Each source gets a revision when it is added, and every asynchronous result
+ * is applied only while that source and revision are still in the project; a
+ * late result for a removed source is dropped, and a late PDF.js document
+ * closed unseen. One file is added at a time; choosing another while one is
+ * still loading supersedes it. A password is passed to both readers for one
+ * attempt and kept nowhere: not in the state snapshot, a log or an error.
+ *
+ * Project intent (roles, surfaces, finish layers) changes only through the
+ * pure operations in `model.ts`; a refused operation is kept as
+ * `lastRefusal` for the panel to show.
  */
-import type { PdfSession } from "@/pdf/adapter";
+import type { DocMetadata, OptionalContentSummary, PdfPageFacts, PdfSession } from "@/pdf/adapter";
 import type { GeometryReport, SourceInfo } from "@/native/sources";
 import {
   available,
@@ -24,7 +29,7 @@ import {
   type Provenance,
 } from "./capability";
 import { diagnose, type Diagnostic, type PageOverride } from "./facts";
-import type { DocMetadata, OptionalContentSummary, PdfPageFacts } from "@/pdf/adapter";
+import * as M from "./model";
 
 export interface ProjectDeps {
   selectSource(): Promise<SourceInfo | null>;
@@ -34,18 +39,20 @@ export interface ProjectDeps {
   digest(bytes: Uint8Array): Promise<string>;
   /** Rejects with a PdfOpenError. */
   openPdf(bytes: Uint8Array, password?: string): Promise<PdfSession>;
+  newId?(): string;
 }
 
 export type LoadState =
   | { kind: "idle" }
   | { kind: "selecting" }
-  | { kind: "cancelled"; kept: boolean }
+  | { kind: "cancelled" }
   | { kind: "loading"; name: string; step: "reading" | "parsing" }
   | { kind: "password"; name: string; attempt: "needed" | "wrong" }
   | { kind: "failed"; name?: string; code: string; message: string }
-  | { kind: "ready" };
+  | { kind: "added"; name: string };
 
 export interface SourceView {
+  id: string;
   revision: number;
   name: string;
   size: number;
@@ -61,29 +68,56 @@ export interface SourceView {
 }
 
 export interface ProjectState {
+  /** The file being added, or how the last attempt ended. */
   load: LoadState;
-  source: SourceView | null;
-  selectedPage: number;
-  /** Manual trim/bleed per page index of the current source revision. */
-  overrides: Record<number, PageOverride>;
+  sources: SourceView[];
+  selected: M.PageRef | null;
+  /** Manual trim/bleed per page, keyed by `pageKey`. */
+  overrides: Record<string, PageOverride>;
+  model: M.ProjectModel;
+  lastRefusal: { code: string; message: string } | null;
+  view: ViewState;
 }
 
-const INITIAL: ProjectState = { load: { kind: "idle" }, source: null, selectedPage: 0, overrides: {} };
+/** How the project is being looked at; not project intent. */
+export interface ViewState {
+  mode: "3d" | "registration";
+  /** The surface the registration view shows; null follows the selected layer's target. */
+  surfaceId: string | null;
+  selectedLayer: string | null;
+  /** Layers left out of the registration overlay (they still count for the finish). */
+  hiddenLayers: string[];
+}
+
+const INITIAL: ProjectState = {
+  load: { kind: "idle" },
+  sources: [],
+  selected: null,
+  overrides: {},
+  model: M.EMPTY_MODEL,
+  lastRefusal: null,
+  view: { mode: "3d", surfaceId: null, selectedLayer: null, hiddenLayers: [] },
+};
 
 export class ProjectStore {
   readonly id: string;
   #state: ProjectState = INITIAL;
   #listeners = new Set<() => void>();
-  #revision = 0;
-  #session: PdfSession | null = null;
+  /** Revisions are unique across the project's lifetime. */
+  #revisions = 0;
+  /** The add operation that may still apply its result. */
+  #loading = 0;
+  #sessions = new Map<string, { revision: number; session: PdfSession }>();
   /** Kept only while a password is being asked for. */
   #pending: { info: SourceInfo; bytes: Uint8Array } | null = null;
+  readonly #newId: () => string;
 
   constructor(
     private readonly deps: ProjectDeps,
     id: string = globalThis.crypto.randomUUID(),
   ) {
     this.id = id;
+    this.#newId = deps.newId ?? (() => globalThis.crypto.randomUUID());
   }
 
   subscribe = (listener: () => void) => {
@@ -98,9 +132,13 @@ export class ProjectStore {
     for (const listener of this.#listeners) listener();
   }
 
-  /** Apply `patch` to the source only if it is still revision `rev`. */
-  #patchSource(rev: number, patch: Partial<SourceView>) {
-    const source = this.#state.source;
+  source(id: string) {
+    return this.#state.sources.find((s) => s.id === id);
+  }
+
+  /** Apply `patch` to source `id` only if it is still revision `rev`. */
+  #patchSource(id: string, rev: number, patch: Partial<SourceView>) {
+    const source = this.source(id);
     if (!source || source.revision !== rev) return;
     const next = { ...source, ...patch };
     next.diagnostics = diagnose({
@@ -110,18 +148,18 @@ export class ProjectStore {
       digest: valueOf(next.digest),
       optionalContent: valueOf(next.optionalContent),
     });
-    this.#set({ source: next });
+    this.#set({ sources: this.#state.sources.map((s) => (s.id === id ? next : s)) });
   }
 
-  isCurrent = (rev: number) => rev === this.#revision;
-
-  /** The PDF.js session of revision `rev`, or null once that source is replaced. */
-  session(rev: number): PdfSession | null {
-    return this.isCurrent(rev) && this.#state.source?.revision === rev ? this.#session : null;
+  /** The PDF.js session of a source at revision `rev`, or null once it is gone. */
+  session(sourceId: string, rev: number): PdfSession | null {
+    const entry = this.#sessions.get(sourceId);
+    return entry && entry.revision === rev ? entry.session : null;
   }
 
-  async open() {
-    // A new selection may replace a file that is still loading; that load becomes stale.
+  /** Choose a PDF and add it to the project. */
+  async addSource() {
+    // A new selection may supersede a file that is still loading.
     if (this.#state.load.kind === "selecting") return;
     this.#set({ load: { kind: "selecting" } });
     let info: SourceInfo | null;
@@ -132,7 +170,7 @@ export class ProjectStore {
       return;
     }
     if (!info) {
-      this.#set({ load: { kind: "cancelled", kept: this.#state.source !== null } });
+      this.#set({ load: { kind: "cancelled" } });
       return;
     }
     this.#pending = null;
@@ -145,41 +183,34 @@ export class ProjectStore {
     await this.#begin(pending.info, password, pending.bytes);
   }
 
-  /** Stop opening the current file; anything it still produces is discarded. */
+  /** Stop adding the current file; anything it still produces is discarded. */
   cancelLoad() {
     if (this.#state.load.kind !== "loading") return;
-    this.#revision += 1;
-    this.#set({ load: { kind: "cancelled", kept: false }, source: null });
+    this.#loading += 1;
+    this.#set({ load: { kind: "cancelled" } });
   }
 
   cancelPassword() {
     if (this.#state.load.kind !== "password") return;
     this.#pending = null;
-    this.#revision += 1;
-    this.#set({ load: { kind: "cancelled", kept: false } });
+    this.#loading += 1;
+    this.#set({ load: { kind: "cancelled" } });
   }
 
   async #begin(info: SourceInfo, password?: string, knownBytes?: Uint8Array) {
-    const rev = ++this.#revision;
-    const old = this.#session;
-    this.#session = null;
-    this.#set({
-      load: { kind: "loading", name: info.name, step: "reading" },
-      source: null,
-      selectedPage: 0,
-      overrides: {},
-    });
-    void old?.close();
+    const op = ++this.#loading;
+    const current = () => op === this.#loading;
+    this.#set({ load: { kind: "loading", name: info.name, step: "reading" } });
 
     let bytes: Uint8Array;
     try {
       bytes = knownBytes ?? (await this.deps.readSource(info.handle));
     } catch (error) {
-      if (this.isCurrent(rev))
+      if (current())
         this.#set({ load: { kind: "failed", name: info.name, ...codeOf(error, "sourceUnreadable") } });
       return;
     }
-    if (!this.isCurrent(rev)) return;
+    if (!current()) return;
     this.#set({ load: { kind: "loading", name: info.name, step: "parsing" } });
 
     // Both readers start now; PDF.js gets its own copy because it transfers the buffer to its worker.
@@ -192,7 +223,7 @@ export class ProjectStore {
     try {
       session = await this.deps.openPdf(bytes.slice(), password);
     } catch (error) {
-      if (!this.isCurrent(rev)) return;
+      if (!current()) return;
       const { code, message } = codeOf(error, "pdfReadFailed");
       if (code === "passwordNeeded" || code === "passwordWrong") {
         this.#pending = { info, bytes };
@@ -204,36 +235,43 @@ export class ProjectStore {
       }
       return;
     }
-    if (!this.isCurrent(rev)) {
+    if (!current()) {
       void session.close();
       return;
     }
-    this.#session = session;
     this.#pending = null;
 
+    const id = this.#newId();
+    const rev = ++this.#revisions;
+    this.#sessions.set(id, { revision: rev, session });
     const pdfjs: Provenance = { engine: session.engine, sourceRevision: rev };
     this.#set({
-      load: { kind: "ready" },
-      source: {
-        revision: rev,
-        name: info.name,
-        size: info.size,
-        engine: session.engine,
-        pageCount: session.pageCount,
-        digest: running,
-        pages: running,
-        labels: running,
-        geometry: running,
-        metadata: notRequested,
-        optionalContent: running,
-        diagnostics: [],
-      },
+      load: { kind: "added", name: info.name },
+      sources: [
+        ...this.#state.sources,
+        {
+          id,
+          revision: rev,
+          name: info.name,
+          size: info.size,
+          engine: session.engine,
+          pageCount: session.pageCount,
+          digest: running,
+          pages: running,
+          labels: running,
+          geometry: running,
+          metadata: notRequested,
+          optionalContent: running,
+          diagnostics: [],
+        },
+      ],
+      selected: { sourceId: id, page: 0 },
     });
 
     const track = <T>(key: keyof SourceView, job: Promise<Capability<T>>) =>
       job.then(
-        (cap) => this.#patchSource(rev, { [key]: cap }),
-        (error) => this.#patchSource(rev, { [key]: failed(error) }),
+        (cap) => this.#patchSource(id, rev, { [key]: cap }),
+        (error) => this.#patchSource(id, rev, { [key]: failed(error) }),
       );
     void track(
       "digest",
@@ -241,7 +279,7 @@ export class ProjectStore {
     );
     void track(
       "geometry",
-      geometry.then((report) => available(report, { engine: report.engine, sourceRevision: rev })),
+      geometry.then((r) => available(r, { engine: r.engine, sourceRevision: rev })),
     );
     void track(
       "pages",
@@ -265,42 +303,119 @@ export class ProjectStore {
     );
   }
 
+  /** Take a source out of the project: its pages' roles and surfaces go, layers using it show as missing. */
+  removeSource(id: string) {
+    const entry = this.#sessions.get(id);
+    this.#sessions.delete(id);
+    void entry?.session.close();
+    const prefix = `${id}:`;
+    this.#set({
+      sources: this.#state.sources.filter((s) => s.id !== id),
+      model: M.removeSource(this.#state.model, id),
+      overrides: Object.fromEntries(
+        Object.entries(this.#state.overrides).filter(([k]) => !k.startsWith(prefix)),
+      ),
+      selected: this.#state.selected?.sourceId === id ? null : this.#state.selected,
+    });
+  }
+
   /** Document information is read only when someone asks for it. */
-  requestMetadata() {
-    const source = this.#state.source;
-    const session = source && this.session(source.revision);
+  requestMetadata(sourceId: string) {
+    const source = this.source(sourceId);
+    const session = source && this.session(sourceId, source.revision);
     if (!source || !session || source.metadata.status !== "notRequested") return;
     const rev = source.revision;
-    this.#patchSource(rev, { metadata: running });
+    this.#patchSource(sourceId, rev, { metadata: running });
     session.metadata().then(
       (m) =>
-        this.#patchSource(rev, { metadata: available(m, { engine: session.engine, sourceRevision: rev }) }),
-      (error) => this.#patchSource(rev, { metadata: failed(error) }),
+        this.#patchSource(sourceId, rev, {
+          metadata: available(m, { engine: session.engine, sourceRevision: rev }),
+        }),
+      (error) => this.#patchSource(sourceId, rev, { metadata: failed(error) }),
     );
   }
 
-  selectPage(index: number) {
-    const count = this.#state.source?.pageCount ?? 0;
-    if (index >= 0 && index < count) this.#set({ selectedPage: index });
+  selectPage(ref: M.PageRef) {
+    const source = this.source(ref.sourceId);
+    if (source && ref.page >= 0 && ref.page < source.pageCount) this.#set({ selected: { ...ref } });
   }
 
   /** Set (or with `undefined`, clear) a manual trim/bleed for the given pages. */
-  setOverride(pages: number[], patch: Partial<PageOverride>) {
+  setOverride(pages: M.PageRef[], patch: Partial<PageOverride>) {
     const overrides = { ...this.#state.overrides };
-    for (const page of pages) {
-      const next: PageOverride = { ...overrides[page], ...patch };
-      for (const key of Object.keys(next) as (keyof PageOverride)[]) if (!next[key]) delete next[key];
-      if (Object.keys(next).length) overrides[page] = next;
-      else delete overrides[page];
+    for (const ref of pages) {
+      const key = M.pageKey(ref);
+      const next: PageOverride = { ...overrides[key], ...patch };
+      for (const k of Object.keys(next) as (keyof PageOverride)[]) if (!next[k]) delete next[k];
+      if (Object.keys(next).length) overrides[key] = next;
+      else delete overrides[key];
     }
     this.#set({ overrides });
   }
 
+  // Project intent ----------------------------------------------------------
+
+  #apply(outcome: M.Outcome) {
+    if (outcome.ok) this.#set({ model: outcome.model, lastRefusal: null });
+    else this.#set({ lastRefusal: { code: outcome.code, message: outcome.message } });
+    return outcome.ok;
+  }
+
+  setRole(ref: M.PageRef, role: M.PageRole) {
+    const model = M.setRole(this.#state.model, ref, role, this.#newId);
+    const added = model.layers.find((l) => !this.#state.model.layers.some((o) => o.id === l.id));
+    this.#set({
+      model,
+      lastRefusal: null,
+      ...(added ? { view: { ...this.#state.view, selectedLayer: added.id } } : {}),
+    });
+  }
+  addLayer(ref: M.PageRef, type: M.FinishType) {
+    return this.#apply(M.addLayer(this.#state.model, ref, type, this.#newId));
+  }
+  assignTarget(layerId: string, surfaceId: string | null) {
+    return this.#apply(M.assignTarget(this.#state.model, layerId, surfaceId));
+  }
+  setLayerType(layerId: string, type: M.FinishType) {
+    return this.#apply(M.setLayerType(this.#state.model, layerId, type));
+  }
+  setInterpretation(layerId: string, patch: Partial<M.MaskInterpretation>) {
+    return this.#apply(M.setInterpretation(this.#state.model, layerId, patch));
+  }
+  resetInterpretation(layerId: string) {
+    return this.#apply(M.setInterpretation(this.#state.model, layerId, M.DEFAULT_INTERPRETATION));
+  }
+  setLayerEnabled(layerId: string, enabled: boolean) {
+    const model = this.#state.model;
+    this.#set({
+      model: { ...model, layers: model.layers.map((l) => (l.id === layerId ? { ...l, enabled } : l)) },
+    });
+  }
+  removeLayer(layerId: string) {
+    this.#set({ model: M.removeLayer(this.#state.model, layerId) });
+  }
+  moveLayer(layerId: string, step: -1 | 1) {
+    this.#set({ model: M.moveLayer(this.#state.model, layerId, step) });
+  }
+  setSurfaceBox(surfaceId: string, box: M.SurfaceBox) {
+    this.#set({ model: M.setSurfaceBox(this.#state.model, surfaceId, box) });
+  }
+
+  setView(patch: Partial<ViewState>) {
+    this.#set({ view: { ...this.#state.view, ...patch } });
+  }
+  toggleLayerShown(layerId: string) {
+    const hidden = this.#state.view.hiddenLayers;
+    this.setView({
+      hiddenLayers: hidden.includes(layerId) ? hidden.filter((h) => h !== layerId) : [...hidden, layerId],
+    });
+  }
+
   dispose() {
-    this.#revision += 1;
+    this.#loading += 1;
     this.#pending = null;
-    void this.#session?.close();
-    this.#session = null;
+    for (const { session } of this.#sessions.values()) void session.close();
+    this.#sessions.clear();
   }
 }
 

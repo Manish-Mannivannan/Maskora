@@ -16,7 +16,7 @@
   "14": "maskora",
   "15": "check-versions.mjs",
   "16": "smoke.mjs",
-  "17": "store.ts",
+  "17": "ProjectStore",
   "18": "prefix-graphify-vault.mjs",
   "19": "check-secrets.mjs",
   "20": "check-adr-references.mjs",
@@ -26,7 +26,7 @@
   "24": "pre-push",
   "25": "next.config.ts",
   "26": "setup.mjs",
-  "27": "Workspace.tsx",
+  "27": "Viewport.tsx",
   "28": "eslint.config.mjs",
   "29": "vitest.config.ts",
   "30": "sources.rs",
@@ -34,6 +34,9 @@
   "32": "copy-pdfjs.mjs",
   "33": "pdfjs-dist",
   "34": "dialog.ps1",
-  "35": "facts.ts",
-  "36": "adapter.ts"
+  "35": "pipeline.ts",
+  "36": "adapter.ts",
+  "37": "PageInspector.tsx",
+  "38": "model.ts",
+  "39": "Section.tsx"
 }

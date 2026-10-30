@@ -1,0 +1,140 @@
+{
+  "fixture": "K2m",
+  "description": "Masks for K2a in a separate file: an opaque page whose trim sits elsewhere on a larger sheet, a transparent page, a page drawn 1.5 mm right and 1 mm down of its nominal place, and a page whose trim is 1 mm too wide",
+  "pages": [
+    {
+      "page": 0,
+      "shapesMm": [
+        [
+          20,
+          30,
+          30,
+          10
+        ]
+      ],
+      "alphaUsable": false,
+      "warnings": [
+        "originMismatch"
+      ],
+      "samples": [
+        {
+          "at": [
+            35,
+            35
+          ],
+          "coverage": 1
+        },
+        {
+          "at": [
+            35,
+            45
+          ],
+          "coverage": 0
+        }
+      ]
+    },
+    {
+      "page": 1,
+      "shapesMm": [
+        [
+          60,
+          40,
+          20,
+          20
+        ]
+      ],
+      "alphaUsable": true,
+      "warnings": [],
+      "samples": [
+        {
+          "at": [
+            70,
+            50
+          ],
+          "coverage": 1
+        },
+        {
+          "at": [
+            50,
+            50
+          ],
+          "coverage": 0
+        }
+      ]
+    },
+    {
+      "page": 2,
+      "shapesMm": [
+        [
+          20,
+          100,
+          30,
+          15
+        ]
+      ],
+      "drawnMm": [
+        [
+          21.5,
+          99,
+          30,
+          15
+        ]
+      ],
+      "correctionMm": [
+        -1.5,
+        1
+      ],
+      "alphaUsable": true,
+      "warnings": [],
+      "samples": [
+        {
+          "at": [
+            20.7,
+            107
+          ],
+          "uncorrected": 0,
+          "corrected": 1
+        },
+        {
+          "at": [
+            35,
+            99.4
+          ],
+          "uncorrected": 1,
+          "corrected": 0
+        },
+        {
+          "at": [
+            50.8,
+            107
+          ],
+          "uncorrected": 1,
+          "corrected": 0
+        },
+        {
+          "at": [
+            35,
+            114.6
+          ],
+          "uncorrected": 0,
+          "corrected": 1
+        }
+      ]
+    },
+    {
+      "page": 3,
+      "shapesMm": [
+        [
+          20,
+          30,
+          30,
+          10
+        ]
+      ],
+      "alphaUsable": true,
+      "warnings": [
+        "sizeMismatch"
+      ]
+    }
+  ]
+}

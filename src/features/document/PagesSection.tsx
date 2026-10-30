@@ -1,33 +1,44 @@
 "use client";
 
 /**
- * Page thumbnails, rendered progressively: only when scrolled into view, at
- * most a few at a time, and cancelled when their source is replaced. Each
- * shows its label, index, physical trim size and rotation.
+ * Page thumbnails of every source, grouped by file and rendered
+ * progressively: only when scrolled into view, at most a few at a time, and
+ * cancelled when their source leaves the project. Each shows its label,
+ * index, role, physical trim size and rotation.
  */
 import { useEffect, useRef, useState } from "react";
 import { ARTWORK_POLICY } from "@/pdf/transform";
 import type { PageSummary } from "@/project/facts";
+import { pageKey, roleOf, type PageRole } from "@/project/model";
+import type { SourceView } from "@/project/store";
 import { useProject } from "@/project/ProjectContext";
 import { noSizeText, sizeText } from "./format";
 import { usePageSummaries } from "./usePages";
 
 type ThumbState = "waiting" | "rendering" | "rendered" | "failed";
 
+const ROLE_BADGE: Record<PageRole, string> = {
+  unassigned: "",
+  print: "Print",
+  mask: "Mask",
+  ignore: "Ignore",
+};
+
 function Thumbnail({
   page,
   root,
-  revision,
-  count,
+  source,
   noSize,
 }: {
   page: PageSummary;
   root: Element | null;
-  revision: number;
-  count: number;
+  source: SourceView;
   noSize: string;
 }) {
-  const [{ selectedPage }, store] = useProject();
+  const [{ selected: sel, model }, store] = useProject();
+  const { revision, pageCount: count } = source;
+  const ref = { sourceId: source.id, page: page.index };
+  const role = roleOf(model, ref);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [visible, setVisible] = useState(false);
   const [state, setState] = useState<ThumbState>("waiting");
@@ -46,7 +57,7 @@ function Thumbnail({
   }, [root]);
 
   useEffect(() => {
-    const session = store.session(revision);
+    const session = store.session(source.id, revision);
     const key = `${revision}:${rotation}`;
     if (!visible || !session || !canvas.current || done.current === key) return;
     const abort = new AbortController();
@@ -65,9 +76,9 @@ function Thumbnail({
       );
     return () => abort.abort();
     // Rendered once per revision and rotation; scrolling away cancels unfinished work.
-  }, [visible, revision, rotation, page.index, store]);
+  }, [visible, revision, rotation, page.index, store, source.id]);
 
-  const selected = selectedPage === page.index;
+  const selected = sel?.sourceId === source.id && sel.page === page.index;
   return (
     <li>
       <button
@@ -75,12 +86,19 @@ function Thumbnail({
         className="thumb"
         data-testid="thumb"
         data-index={page.index}
+        data-source={source.name}
         data-state={state}
+        data-role={role}
         aria-pressed={selected}
-        onClick={() => store.selectPage(page.index)}
+        onClick={() => store.selectPage(ref)}
       >
         <span className="thumb-frame">
           <canvas ref={canvas} aria-hidden="true" />
+          {role !== "unassigned" ? (
+            <span className="role-badge" data-role={role}>
+              {ROLE_BADGE[role]}
+            </span>
+          ) : null}
         </span>
         <span className="thumb-label" data-testid="thumb-label">
           {page.label ?? "—"}{" "}
@@ -97,21 +115,20 @@ function Thumbnail({
   );
 }
 
-export function PagesSection() {
-  const [{ source }] = useProject();
-  const pages = usePageSummaries();
+function SourcePages({ source, summaries }: { source: SourceView; summaries: Map<string, PageSummary> }) {
   const [root, setRoot] = useState<HTMLUListElement | null>(null);
-  if (!source) return <p className="hint">Open a PDF to see its pages.</p>;
+  const pages = Array.from({ length: source.pageCount }, (_, i) =>
+    summaries.get(pageKey({ sourceId: source.id, page: i }))!,
+  );
   return (
-    <>
+    <div className="source-pages" data-testid="source-pages" data-name={source.name}>
       <p className="hint">
-        Labels:{" "}
+        <strong>{source.name}</strong> · labels:{" "}
         {source.labels.status === "available"
           ? "from the file"
           : source.labels.status === "absent"
             ? "none in the file"
             : "reading…"}
-        . Size is the trim size.
       </p>
       <ul className="thumbs" ref={setRoot} data-testid="thumbs" key={source.revision}>
         {pages.map((page) => (
@@ -119,12 +136,25 @@ export function PagesSection() {
             key={page.index}
             page={page}
             root={root}
-            revision={source.revision}
-            count={source.pageCount}
+            source={source}
             noSize={noSizeText(source.geometry)}
           />
         ))}
       </ul>
+    </div>
+  );
+}
+
+export function PagesSection() {
+  const [{ sources }] = useProject();
+  const summaries = usePageSummaries();
+  if (!sources.length) return <p className="hint">Add a PDF to see its pages.</p>;
+  return (
+    <>
+      <p className="hint">Size is the trim size. Select a page to give it a role.</p>
+      {sources.map((source) => (
+        <SourcePages key={source.id} source={source} summaries={summaries} />
+      ))}
     </>
   );
 }

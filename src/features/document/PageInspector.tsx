@@ -1,17 +1,28 @@
 "use client";
 
 /**
- * The selected page: label, size, rotation, the five boxes with provenance,
- * a MediaBox render with every box outlined, and manual trim/bleed. An
- * override replaces a box's effective value; the source fact stays listed.
+ * The selected page of any source: its role (Print, Mask, Ignore), label,
+ * size, rotation, the five boxes with provenance, a MediaBox render with
+ * every box outlined, and manual trim/bleed. An override replaces a box's
+ * effective value; the source fact stays listed.
  */
 import { useEffect, useRef, useState } from "react";
 import { ARTWORK_POLICY, sizeMm, toDevice, type Rect, type RenderPlan } from "@/pdf/transform";
 import { BOX_NAMES, insetBy, outsetBy, type BoxRow, type PageSummary } from "@/project/facts";
 import { useProject } from "@/project/ProjectContext";
-import { CapabilityText } from "./DocumentSection";
+import { CapabilityText } from "./SourcesSection";
 import { ORIGIN_TEXT, mm, noSizeText, sizeText } from "./format";
-import { usePageSummaries } from "./usePages";
+import { pageName, usePageSummaries } from "./usePages";
+import {
+  FINISH_NAMES,
+  pageKey,
+  roleOf,
+  surfaceFor,
+  type PageRef,
+  type PageRole,
+  type SurfaceBox,
+} from "@/project/model";
+import type { SourceView } from "@/project/store";
 
 const OUTLINE: Record<string, string> = {
   CropBox: "#8fb3ff",
@@ -20,7 +31,8 @@ const OUTLINE: Record<string, string> = {
   ArtBox: "#d9a6ff",
 };
 
-function BoxPreview({ page, revision }: { page: PageSummary; revision: number }) {
+function BoxPreview({ page, source }: { page: PageSummary; source: SourceView }) {
+  const revision = source.revision;
   const [, store] = useProject();
   const canvas = useRef<HTMLCanvasElement>(null);
   const [plan, setPlan] = useState<RenderPlan | null>(null);
@@ -29,7 +41,7 @@ function BoxPreview({ page, revision }: { page: PageSummary; revision: number })
   const media = page.boxes[0].effective;
 
   useEffect(() => {
-    const session = store.session(revision);
+    const session = store.session(source.id, revision);
     const el = canvas.current;
     if (!session || !el) return;
     const abort = new AbortController();
@@ -163,7 +175,8 @@ function BoxTable({ page }: { page: PageSummary }) {
   );
 }
 
-function Overrides({ page, pageCount }: { page: PageSummary; pageCount: number }) {
+function Overrides({ page, source }: { page: PageSummary; source: SourceView }) {
+  const pageCount = source.pageCount;
   const [{ overrides }, store] = useProject();
   const [inset, setInset] = useState("3");
   const [bleed, setBleed] = useState("3");
@@ -171,8 +184,13 @@ function Overrides({ page, pageCount }: { page: PageSummary; pageCount: number }
   const [message, setMessage] = useState<string | null>(null);
   const media = page.boxes[0].effective;
   const trim = page.boxes[BOX_NAMES.indexOf("TrimBox")].effective;
-  const targets = allPages ? Array.from({ length: pageCount }, (_, i) => i) : [page.index];
-  const hasOverride = targets.some((i) => overrides[i]);
+  const targets: PageRef[] = (allPages ? Array.from({ length: pageCount }, (_, i) => i) : [page.index]).map(
+    (i) => ({
+      sourceId: source.id,
+      page: i,
+    }),
+  );
+  const hasOverride = targets.some((ref) => overrides[pageKey(ref)]);
 
   if (!media || !trim)
     return <p className="hint">Manual trim and bleed become available once the page boxes are read.</p>;
@@ -247,18 +265,95 @@ function Overrides({ page, pageCount }: { page: PageSummary; pageCount: number }
   );
 }
 
+const ROLES: [PageRole, string][] = [
+  ["unassigned", "Unassigned"],
+  ["print", "Print"],
+  ["mask", "Mask"],
+  ["ignore", "Ignore"],
+];
+
+const SURFACE_BOXES: SurfaceBox[] = ["TrimBox", "BleedBox", "CropBox", "MediaBox"];
+
+/** Role, and what the role means for this page: its surface, or the finishes it supplies. */
+function PageRoleControls({ refPage }: { refPage: PageRef }) {
+  const [{ model, sources }, store] = useProject();
+  const summaries = usePageSummaries();
+  const role = roleOf(model, refPage);
+  const surface = surfaceFor(model, refPage);
+  const finishes = model.layers.filter(
+    (l) => l.mask.kind === "pdfPage" && l.mask.sourceId === refPage.sourceId && l.mask.page === refPage.page,
+  );
+  const targeting = surface ? model.layers.filter((l) => l.target === surface.id) : [];
+  const nameOf = (id: string | null) => {
+    const s = model.surfaces.find((x) => x.id === id);
+    return s ? pageName(sources, summaries, s.artwork) : "no page yet";
+  };
+  return (
+    <div className="role" data-testid="role" data-role={role}>
+      <div className="segmented" role="radiogroup" aria-label="Page role">
+        {ROLES.map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            role="radio"
+            aria-checked={role === value}
+            data-testid={`role-${value}`}
+            onClick={() => store.setRole(refPage, value)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {surface ? (
+        <label className="inline">
+          Printed page uses its
+          <select
+            data-testid="surface-box"
+            value={surface.box}
+            onChange={(e) => store.setSurfaceBox(surface.id, e.target.value as SurfaceBox)}
+          >
+            {SURFACE_BOXES.map((b) => (
+              <option key={b} value={b}>
+                {b.replace("Box", "")}
+              </option>
+            ))}
+          </select>
+          box
+        </label>
+      ) : null}
+      {surface ? (
+        <p className="hint">
+          {targeting.length
+            ? `Finishes on this page: ${targeting.map((l) => FINISH_NAMES[l.type]).join(", ")}.`
+            : "No finish targets this page yet."}
+        </p>
+      ) : null}
+      {role === "mask" ? (
+        <p className="hint">
+          {finishes.map((l) => `${FINISH_NAMES[l.type]} → ${nameOf(l.target)}`).join("; ")}.{" "}
+          <button type="button" className="link" onClick={() => store.addLayer(refPage, "uv")}>
+            Use this page for another finish
+          </button>
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export function PageInspector() {
-  const [{ source, selectedPage }] = useProject();
-  const pages = usePageSummaries();
-  const page = pages[selectedPage];
-  if (!source || !page) return <p className="hint">Select a page to inspect it.</p>;
+  const [{ sources, selected }] = useProject();
+  const summaries = usePageSummaries();
+  const source = sources.find((s) => s.id === selected?.sourceId);
+  const page = selected ? summaries.get(pageKey(selected)) : undefined;
+  if (!source || !page || !selected) return <p className="hint">Select a page to inspect it.</p>;
   const r = page.rotation;
   return (
-    <div data-testid="inspector" data-page={page.index}>
+    <div data-testid="inspector" data-page={page.index} data-source={source.name}>
+      <PageRoleControls refPage={selected} />
       <dl className="facts">
         <dt>Page</dt>
         <dd>
-          {page.index + 1} of {source.pageCount}
+          {page.index + 1} of {source.pageCount} in {source.name}
         </dd>
         <dt>Label</dt>
         <dd data-testid="page-label">
@@ -300,9 +395,9 @@ export function PageInspector() {
           from PDF.js alone.
         </p>
       ) : null}
-      <BoxPreview page={page} revision={source.revision} />
+      <BoxPreview key={source.id} page={page} source={source} />
       <BoxTable page={page} />
-      <Overrides page={page} pageCount={source.pageCount} />
+      <Overrides page={page} source={source} />
     </div>
   );
 }

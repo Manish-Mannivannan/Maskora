@@ -1,0 +1,63 @@
+{
+  "description": "Stored mask sources as a project file may contain them. Supported kinds parse; future and unknown kinds are kept verbatim as unsupported; malformed entries are refused.",
+  "cases": [
+    {
+      "name": "pdf page",
+      "input": { "kind": "pdfPage", "version": 1, "sourceId": "src-a", "page": 3 },
+      "expect": { "ok": true, "kind": "pdfPage" }
+    },
+    {
+      "name": "pdf page from a newer version",
+      "input": { "kind": "pdfPage", "version": 2, "sourceId": "src-a", "page": 3, "box": "TrimBox" },
+      "expect": { "ok": true, "kind": "unsupported", "declaredKind": "pdfPage" }
+    },
+    {
+      "name": "pdf layer (planned)",
+      "input": { "kind": "pdfLayer", "version": 1, "sourceId": "src-a", "layer": "UV" },
+      "expect": { "ok": true, "kind": "unsupported", "declaredKind": "pdfLayer" }
+    },
+    {
+      "name": "separation (planned)",
+      "input": {
+        "kind": "pdfSeparation",
+        "version": 1,
+        "sourceId": "src-a",
+        "page": 0,
+        "colorant": "Spot UV"
+      },
+      "expect": { "ok": true, "kind": "unsupported", "declaredKind": "pdfSeparation" }
+    },
+    {
+      "name": "vector path (planned)",
+      "input": { "kind": "vectorPath", "version": 1, "d": "M0 0 L10 0 L10 10 Z" },
+      "expect": { "ok": true, "kind": "unsupported", "declaredKind": "vectorPath" }
+    },
+    {
+      "name": "image (planned)",
+      "input": { "kind": "image", "version": 1, "file": "uv.png" },
+      "expect": { "ok": true, "kind": "unsupported", "declaredKind": "image" }
+    },
+    {
+      "name": "unknown kind",
+      "input": { "kind": "hologram", "version": 7, "anything": [1, 2, 3] },
+      "expect": { "ok": true, "kind": "unsupported", "declaredKind": "hologram" }
+    },
+    {
+      "name": "pdf page without a page index",
+      "input": { "kind": "pdfPage", "version": 1, "sourceId": "src-a" },
+      "expect": { "ok": false, "code": "invalidMaskSource" }
+    },
+    {
+      "name": "pdf page with a negative index",
+      "input": { "kind": "pdfPage", "version": 1, "sourceId": "src-a", "page": -1 },
+      "expect": { "ok": false, "code": "invalidMaskSource" }
+    },
+    { "name": "no kind", "input": { "page": 1 }, "expect": { "ok": false, "code": "invalidMaskSource" } },
+    { "name": "not an object", "input": "pdfPage", "expect": { "ok": false, "code": "invalidMaskSource" } },
+    {
+      "name": "the internal unsupported marker",
+      "input": { "kind": "unsupported" },
+      "expect": { "ok": false, "code": "invalidMaskSource" }
+    }
+  ]
+}
