@@ -694,3 +694,23 @@ body {
     Consolas,
     monospace;
 }
+
+.approvals {
+  margin: 6px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.approvals li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+}
+
+.approvals li button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}

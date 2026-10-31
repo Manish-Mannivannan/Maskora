@@ -1,0 +1,61 @@
+%PDF-1.7
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R /OpenAction 3 0 R /Names << /JavaScript << /Names [(c1) 3 0 R] >> /EmbeddedFiles << /Names [(C1.txt) 6 0 R] >> >> >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [11 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Action /S /JavaScript /JS (app.alert\("C1 ran"\); this.submitForm\("http://127.0.0.1:9/c1/submit"\); app.launchURL\("http://127.0.0.1:9/c1/launch", true\);) >>
+endobj
+4 0 obj
+<< /Type /Action /S /JavaScript /JS (app.alert\("C1 page opened"\); this.getURL\("http://127.0.0.1:9/c1/page"\);) >>
+endobj
+5 0 obj
+<< /Type /EmbeddedFile /Length 27 >>
+stream
+attached text, never opened
+endstream
+endobj
+6 0 obj
+<< /Type /Filespec /F (C1.txt) /UF (C1.txt) /EF << /F 5 0 R >> >>
+endobj
+7 0 obj
+<< /Type /Annot /Subtype /Link /Rect [10 150 90 190] /Border [0 0 0] /A << /S /URI /URI (http://127.0.0.1:9/c1/uri) >> >>
+endobj
+8 0 obj
+<< /Type /Annot /Subtype /Link /Rect [110 150 190 190] /Border [0 0 0] /A << /S /Launch /F (C:WindowsSystem32calc.exe) >> >>
+endobj
+9 0 obj
+<< /Type /Annot /Subtype /FileAttachment /Rect [10 10 30 30] /FS 6 0 R /Name /PushPin >>
+endobj
+10 0 obj
+<< /Length 33 >>
+stream
+0.5 0.5 0.5 rg 50 50 100 80 re f
+
+endstream
+endobj
+11 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /AA << /O 4 0 R >> /Annots [7 0 R 8 0 R 9 0 R] /Contents 10 0 R >>
+endobj
+xref
+0 12
+0000000000 65535 f 
+0000000015 00000 n 
+0000000178 00000 n 
+0000000236 00000 n 
+0000000421 00000 n 
+0000000553 00000 n 
+0000000650 00000 n 
+0000000731 00000 n 
+0000000868 00000 n 
+0000001008 00000 n 
+0000001112 00000 n 
+0000001196 00000 n 
+trailer
+<< /Size 12 /Root 1 0 R /ID [<4d61736b6f72612d666978747572652d> <4d61736b6f72612d666978747572652d>] >>
+startxref
+1332
+%%EOF

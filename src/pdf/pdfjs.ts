@@ -32,6 +32,8 @@ export function localDocumentParams(data: Uint8Array, password?: string): Docume
     standardFontDataUrl: `${BASE}standard_fonts/`,
     wasmUrl: `${BASE}wasm/`,
     iccUrl: `${BASE}iccs/`,
+    // Document content is data, never code (architecture §11.1): this API runs no document JavaScript or actions,
+    // PDF.js 6 compiles nothing with eval (and the CSP would refuse it), and XFA forms stay off.
     enableXfa: false,
     verbosity: 0,
   };

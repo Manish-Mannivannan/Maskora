@@ -42,6 +42,11 @@ pub struct ProjectError {
     pub message: String,
 }
 
+/// Take the one dialog turn, or refuse while another dialog is open.
+fn dialog_turn() -> Result<crate::dialog_turn::Turn, ProjectError> {
+    crate::dialog_turn::take().ok_or_else(|| err("dialogBusy", crate::dialog_turn::BUSY))
+}
+
 fn err(code: &'static str, message: impl Into<String>) -> ProjectError {
     ProjectError {
         code,
@@ -153,6 +158,45 @@ fn resolve_ref(dir: &Path, relative: &str) -> Option<PathBuf> {
     Some(normalize(&dir.join(rel)))
 }
 
+/// Limits a project document must keep, whatever the frontend validated (architecture §7.1).
+const MAX_DEPTH: usize = 64;
+const MAX_NUMBER: f64 = 1.0e9;
+const MAX_STRING: usize = 100_000;
+const MAX_ITEMS: usize = 100_000;
+
+/// Refuse documents nested too deeply, numbers beyond any real setting, and oversized strings or lists.
+fn check_bounds(value: &Value, depth: usize) -> Result<(), ProjectError> {
+    let bad = |what: &str| {
+        err(
+            "invalidProject",
+            format!("The project file has {what}; it was not read."),
+        )
+    };
+    if depth > MAX_DEPTH {
+        return Err(bad("values nested too deeply"));
+    }
+    match value {
+        Value::Number(n) => match n.as_f64() {
+            Some(x) if x.is_finite() && x.abs() <= MAX_NUMBER => Ok(()),
+            _ => Err(bad("a number out of range")),
+        },
+        Value::String(t) if t.len() > MAX_STRING => Err(bad("an oversized text value")),
+        Value::Array(items) => {
+            if items.len() > MAX_ITEMS {
+                return Err(bad("an oversized list"));
+            }
+            items.iter().try_for_each(|v| check_bounds(v, depth + 1))
+        }
+        Value::Object(map) => {
+            if map.len() > MAX_ITEMS {
+                return Err(bad("an oversized object"));
+            }
+            map.values().try_for_each(|v| check_bounds(v, depth + 1))
+        }
+        _ => Ok(()),
+    }
+}
+
 /// Structural checks the native side owns: format, schema version, size, source list.
 /// The frontend validates every value in detail.
 pub fn validate_project(text: &str) -> Result<Value, ProjectError> {
@@ -164,6 +208,7 @@ pub fn validate_project(text: &str) -> Result<Value, ProjectError> {
     }
     let value: Value = serde_json::from_str(text)
         .map_err(|_| err("invalidProject", "The file is not a Maskora project."))?;
+    check_bounds(&value, 0)?;
     if value.get("format").and_then(Value::as_str) != Some(PROJECT_FORMAT) {
         return Err(err("invalidProject", "The file is not a Maskora project."));
     }
@@ -483,6 +528,7 @@ pub async fn save_project(
                 .filter(|c| !"\\/:*?\"<>|".contains(*c))
                 .take(80)
                 .collect();
+            let _turn = dialog_turn()?;
             let picked = app
                 .dialog()
                 .file()
@@ -531,6 +577,7 @@ pub async fn open_project(
     projects: tauri::State<'_, ProjectFiles>,
 ) -> Result<Option<Opened>, ProjectError> {
     use tauri_plugin_dialog::DialogExt;
+    let _turn = dialog_turn()?;
     let picked = app
         .dialog()
         .file()
@@ -589,6 +636,7 @@ pub async fn locate_source(
         .filter(|c| !"\\/:*?\"<>|".contains(*c))
         .take(200)
         .collect();
+    let _turn = dialog_turn()?;
     let mut dialog = app
         .dialog()
         .file()
@@ -687,6 +735,7 @@ pub async fn export_png(
         .filter(|c| !"\\/:*?\"<>|".contains(*c))
         .take(120)
         .collect();
+    let _turn = dialog_turn()?;
     let picked = app
         .dialog()
         .file()
@@ -833,6 +882,47 @@ mod tests {
         v.extend_from_slice(&height.to_be_bytes());
         v.extend_from_slice(&[8, 6, 0, 0, 0, 0, 0, 0, 0]);
         v
+    }
+
+    #[test]
+    fn documents_out_of_bounds_are_refused_before_anything_else() {
+        let deep = format!(
+            "{{\"format\":\"maskora-project\",\"schemaVersion\":2,\"sources\":[],\"x\":{}{}}}",
+            "[".repeat(80),
+            "]".repeat(80)
+        );
+        assert_eq!(validate_project(&deep).unwrap_err().code, "invalidProject");
+        let huge =
+            json!({ "format": PROJECT_FORMAT, "schemaVersion": 2, "sources": [], "x": 1e300 })
+                .to_string();
+        assert!(
+            validate_project(&huge)
+                .unwrap_err()
+                .message
+                .contains("number out of range")
+        );
+        let long = json!({ "format": PROJECT_FORMAT, "schemaVersion": 2, "sources": [], "x": "a".repeat(200_000) })
+            .to_string();
+        assert!(
+            validate_project(&long)
+                .unwrap_err()
+                .message
+                .contains("oversized text")
+        );
+        assert!(validate_project(&project(json!([{ "id": "s1", "sha256": SHA_A }]))).is_ok());
+    }
+
+    #[test]
+    fn a_reference_climbing_out_of_the_project_folder_grants_nothing() {
+        let dir = temp_dir();
+        let registry = SourceRegistry::default();
+        let trust = TrustStore::default();
+        let value = json!({ "sources": [{ "id": "x", "sha256": SHA_A,
+            "ref": { "relativePath": "../../../../Windows/win.ini", "fileName": "win.ini" } }] });
+        let out = classify_sources(&dir, &value, &trust, &registry);
+        assert_ne!(out[0].status, "authorized");
+        assert!(out[0].source.is_none());
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

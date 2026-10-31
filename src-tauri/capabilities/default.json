@@ -14,6 +14,9 @@
     "allow-save-recovery",
     "allow-peek-recovery",
     "allow-discard-recovery",
-    "allow-recover-project"
+    "allow-recover-project",
+    "allow-list-approvals",
+    "allow-forget-approval",
+    "allow-forget-all-approvals"
   ]
 }

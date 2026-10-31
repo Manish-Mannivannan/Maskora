@@ -1,16 +1,16 @@
 # Graph Report - Maskora  (2026-10-31)
 
 ## Corpus Check
-- 140 files · ~102,598 words
+- 143 files · ~105,424 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1271 nodes · 3028 edges · 68 communities (60 shown, 8 thin omitted)
-- Extraction: 97% EXTRACTED · 3% INFERRED · 0% AMBIGUOUS · INFERRED: 102 edges (avg confidence: 0.83)
+- 1310 nodes · 3133 edges · 72 communities (62 shown, 10 thin omitted)
+- Extraction: 97% EXTRACTED · 3% INFERRED · 0% AMBIGUOUS · INFERRED: 106 edges (avg confidence: 0.83)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `8d6f0d41`
+- Built from commit: `f3101373`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -44,7 +44,7 @@
 - copy-pdfjs.mjs
 - pipeline.ts
 - adapter.ts
-- log.ts
+- ProjectSection.tsx
 - facts.ts
 - Section.tsx
 - probe-pdf.mjs
@@ -52,14 +52,14 @@
 - store.ts
 - dependencies
 - .#begin
-- ProjectContext.tsx
+- store.files.test.ts
 - store.test.ts
 - .save
 - package.json
 - project.rs
-- projectFile.ts
+- TrustStore
 - model.ts
-- scene.tsx
+- Viewport.tsx
 - PageScene.tsx
 - transform.ts
 - useProject
@@ -67,26 +67,30 @@
 - pngText.ts
 - Workspace.tsx
 - webdriver.mjs
-- finishMaterial.ts
-- reliefWorker.test.ts
+- ProjectContext.tsx
+- scene.tsx
 - smoke-project.mjs
 - PageInspector.tsx
-- reliefWorker.ts
+- probe.ts
 - jobs.ts
-- mmPerUnit
+- Rect
 - SceneProbeApi
+- layout.ts
+- SourcesSection.tsx
+- log.ts
+- .#setFile
 
 ## God Nodes (most connected - your core abstractions)
 1. `ProjectStore` - 67 edges
 2. `useProject()` - 42 edges
-3. `makeDoc()` - 34 edges
+3. `makeDoc()` - 35 edges
 4. `usePageSummaries()` - 27 edges
-5. `pageKey()` - 25 edges
-6. `SourceRegistry` - 22 edges
-7. `scripts` - 21 edges
-8. `Rect` - 20 edges
-9. `TrustStore` - 19 edges
-10. `compilerOptions` - 19 edges
+5. `TrustStore` - 26 edges
+6. `pageKey()` - 25 edges
+7. `SourceRegistry` - 22 edges
+8. `scripts` - 21 edges
+9. `Rect` - 20 edges
+10. `ProjectError` - 19 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `write_snapshot()` --calls--> `write_atomically()`  [INFERRED]
@@ -103,7 +107,7 @@
 ## Import Cycles
 - None detected.
 
-## Communities (68 total, 8 thin omitted)
+## Communities (72 total, 10 thin omitted)
 
 ### Community 0 - "sync-plan-issues.mjs"
 Cohesion: 0.09
@@ -126,20 +130,20 @@ Cohesion: 0.10
 Nodes (21): eslint, eslint-config-next, devDependencies, eslint, eslint-config-next, prettier, @tauri-apps/cli, @types/node (+13 more)
 
 ### Community 5 - "permissions"
-Cohesion: 0.11
-Nodes (17): allow-discard-recovery, allow-export-png, allow-inspect-geometry, allow-locate-source, allow-open-project, allow-peek-recovery, allow-read-source, allow-recover-project (+9 more)
+Cohesion: 0.10
+Nodes (20): allow-discard-recovery, allow-export-png, allow-forget-all-approvals, allow-forget-approval, allow-inspect-geometry, allow-list-approvals, allow-locate-source, allow-open-project (+12 more)
 
 ### Community 6 - "corpus.mjs"
 Cohesion: 0.07
-Nodes (68): A1(), artworkPage(), baseline(), box(), circle(), CORPUS, coverageLayout(), D1() (+60 more)
+Nodes (69): A1(), artworkPage(), baseline(), box(), C1(), circle(), CORPUS, coverageLayout() (+61 more)
 
 ### Community 7 - "AGENTS.md — Instructions for coding agents"
 Cohesion: 0.17
 Nodes (11): AGENTS.md — Instructions for coding agents, Commits belong to the maintainer, Do not cite vault ADR numbers in the repository, Graphify, Keep architecture, plan, and code synchronized, Next.js version, Project invariants, Read canonical project documents first (+3 more)
 
 ### Community 8 - "recovery.rs"
-Cohesion: 0.10
-Nodes (43): SourceOnOpen, a_corrupt_snapshot_offers_nothing(), a_snapshot_round_trips_and_its_sources_are_judged_by_the_trust_record(), discard_recovery(), err(), peek_recovery(), Pending, project_json() (+35 more)
+Cohesion: 0.20
+Nodes (27): SourceOnOpen, a_corrupt_snapshot_offers_nothing(), a_snapshot_round_trips_and_its_sources_are_judged_by_the_trust_record(), discard_recovery(), err(), peek_recovery(), Pending, project_json() (+19 more)
 
 ### Community 10 - "Maskora"
 Cohesion: 0.09
@@ -150,12 +154,12 @@ Cohesion: 0.18
 Nodes (7): cargoLock, declared, npmRows, pkg, problems, root, versionsMd
 
 ### Community 16 - "smoke.mjs"
-Cohesion: 0.11
-Nodes (25): boxOrigins(), choose(), clearSources(), diagnostics(), dialog(), drag(), expect(), faces3d() (+17 more)
+Cohesion: 0.10
+Nodes (27): approvals, boxOrigins(), choose(), clearSources(), diagnostics(), dialog(), drag(), expect() (+19 more)
 
 ### Community 17 - "ProjectStore"
-Cohesion: 0.10
-Nodes (4): buildProject(), peek(), ProjectStore, roundPose()
+Cohesion: 0.11
+Nodes (3): buildProject(), ProjectStore, roundPose()
 
 ### Community 18 - "prefix-graphify-vault.mjs"
 Cohesion: 0.25
@@ -170,8 +174,8 @@ Cohesion: 0.40
 Nodes (3): GENERATED, repoRoot, violations
 
 ### Community 27 - "ExportStage.tsx"
-Cohesion: 0.11
-Nodes (34): BACKGROUNDS, ExportSection(), noSubscription(), Progress, STEP_TEXT, viewportAspect(), Capture(), EXPORT_MAX (+26 more)
+Cohesion: 0.13
+Nodes (25): BACKGROUNDS, ExportSection(), noSubscription(), Progress, STEP_TEXT, viewportAspect(), Capture(), Captured (+17 more)
 
 ### Community 30 - "sources.rs"
 Cohesion: 0.16
@@ -186,20 +190,20 @@ Cohesion: 0.40
 Nodes (4): dest, root, src, { version }
 
 ### Community 35 - "pipeline.ts"
-Cohesion: 0.11
-Nodes (28): alphaVaries(), boxBlur(), compose(), coverageFromPixels(), coveredOutside(), FinishMaps, LayerCoverage, luma() (+20 more)
+Cohesion: 0.12
+Nodes (27): alphaVaries(), boxBlur(), compose(), coverageFromPixels(), coveredOutside(), FinishMaps, LayerCoverage, luma() (+19 more)
 
 ### Community 36 - "adapter.ts"
-Cohesion: 0.09
-Nodes (25): classifyOpenError(), createLimiter(), INFO_FIELDS, MetadataField, openSession(), parsePdfDate(), PdfOpenError, PdfOpenErrorCode (+17 more)
+Cohesion: 0.15
+Nodes (16): classifyOpenError(), createLimiter(), INFO_FIELDS, MetadataField, openSession(), parsePdfDate(), PdfOpenError, PdfOpenErrorCode (+8 more)
 
-### Community 37 - "log.ts"
-Cohesion: 0.20
-Nodes (13): clean(), clearDiagnostics(), DiagnosticEvent, diagnostics(), events, jobId(), record(), DiagnosticsText() (+5 more)
+### Community 37 - "ProjectSection.tsx"
+Cohesion: 0.18
+Nodes (16): diagnostics(), Approvals(), DiagnosticsText(), lastText(), ProjectSection(), relinkText(), WHAT, close() (+8 more)
 
 ### Community 38 - "facts.ts"
-Cohesion: 0.15
-Nodes (17): PageInput, BoxFact, FactOrigin, asRotation(), Rotation, BOX_NAMES, boxFact(), BoxName (+9 more)
+Cohesion: 0.13
+Nodes (23): Overrides(), BoxFact, FactOrigin, GeometryReport, DocMetadata, OptionalContentSummary, PdfPageFacts, Rotation (+15 more)
 
 ### Community 39 - "Section.tsx"
 Cohesion: 0.43
@@ -210,28 +214,24 @@ Cohesion: 0.14
 Nodes (6): FIXTURES, known(), OUT, report, run, same()
 
 ### Community 41 - "reliefMesh.ts"
-Cohesion: 0.18
-Nodes (17): blurField(), buildBoundedReliefMesh(), buildReliefMesh(), distanceField(), downsample(), edt1d(), estimateTriangles(), label() (+9 more)
+Cohesion: 0.09
+Nodes (35): heightProfile(), normalMap(), ReliefRequest, blurField(), BoundedRelief, buildBoundedReliefMesh(), buildReliefMesh(), distanceField() (+27 more)
 
 ### Community 42 - "store.ts"
 Cohesion: 0.10
-Nodes (24): bytesText(), CapabilityText(), PasswordForm(), SourceCard(), SourcesSection(), statusText(), DocMetadata, OptionalContentSummary (+16 more)
+Nodes (19): available(), Capability, failed(), notRequested, Provenance, running, PageOverride, DEFAULT_LIGHTING (+11 more)
 
 ### Community 43 - "dependencies"
 Cohesion: 0.12
 Nodes (17): next, dependencies, next, pdfjs-dist, react, react-dom, @react-three/drei, @react-three/fiber (+9 more)
 
-### Community 44 - ".#begin"
-Cohesion: 0.19
-Nodes (3): codeOf(), locate(), safeJson()
-
-### Community 45 - "ProjectContext.tsx"
-Cohesion: 0.09
-Nodes (34): discardRecovery(), Exported, Located, locateSource(), Opened, openProject(), peekRecovery(), Recovered (+26 more)
+### Community 45 - "store.files.test.ts"
+Cohesion: 0.15
+Nodes (17): Located, Opened, Recovered, RecoveryRequest, Saved, SaveRequest, SourceOnOpen, SourceInfo (+9 more)
 
 ### Community 46 - "store.test.ts"
-Cohesion: 0.16
-Nodes (7): PdfSession, add(), deferred(), flush(), info(), scriptedDeps(), session()
+Cohesion: 0.15
+Nodes (8): PageInput, PdfSession, add(), deferred(), flush(), info(), scriptedDeps(), session()
 
 ### Community 47 - ".save"
 Cohesion: 0.26
@@ -242,32 +242,32 @@ Cohesion: 0.29
 Nodes (6): engines, node, name, private, type, version
 
 ### Community 49 - "project.rs"
-Cohesion: 0.12
-Nodes (53): Error, Located, Request, SourceInfo, a_file_held_open_elsewhere_is_reported_and_kept(), an_interrupted_write_leaves_nothing_behind_on_the_next(), atomic_writes_replace_whole_files_and_leave_nothing_behind_on_failure(), check_png() (+45 more)
+Cohesion: 0.10
+Nodes (61): Drop, Error, Located, Request, SourceInfo, a_second_dialog_waits_for_the_first_to_close(), Option, take() (+53 more)
 
-### Community 50 - "projectFile.ts"
-Cohesion: 0.09
-Nodes (29): FINISH_TYPES, RECIPE_LIMITS, SceneAssignment, STOCK_LIMITS, SurfaceBox, arr(), BOXES, DEFAULT_LIGHTING (+21 more)
+### Community 50 - "TrustStore"
+Cohesion: 0.14
+Nodes (26): Approval, Approval, approval_id(), approvals_are_listed_without_paths_and_can_be_forgotten(), crafted_and_oversized_records_trust_nothing_they_should_not(), forget_all_approvals(), forget_approval(), hash_file() (+18 more)
 
 ### Community 51 - "model.ts"
-Cohesion: 0.10
-Nodes (35): close(), fmt(), ReconcilePanel(), assignTarget(), EMPTY_MODEL, FUTURE_KINDS, MaskSource, moveLayer() (+27 more)
+Cohesion: 0.06
+Nodes (63): BoxName, addLayer(), assignTarget(), DEFAULT_INTERPRETATION, EMPTY_MODEL, FINISH_TYPES, FUTURE_KINDS, MaskSource (+55 more)
 
-### Community 52 - "scene.tsx"
+### Community 52 - "Viewport.tsx"
 Cohesion: 0.14
-Nodes (25): Viewport, FINISH_NAMES, PrintSurface, surfaceFor(), fitDistance(), leafPlacements(), sizesDiffer(), spreadPlacements() (+17 more)
+Nodes (16): Viewport, DRAG_DEGREES_PER_PIXEL, dragLight(), ELEVATION_MAX, ELEVATION_MIN, LightAngles, lightDirection(), normalizeAngles() (+8 more)
 
 ### Community 53 - "PageScene.tsx"
-Cohesion: 0.16
-Nodes (20): LoggedEvent, latestOnly(), ReliefShape, toDevice(), artworkTexture(), faceGeometry, localFromUv(), Placement (+12 more)
+Cohesion: 0.15
+Nodes (24): LoggedEvent, latestOnly(), ReliefShape, FinishRecipe, Stock, artworkTexture(), coatDigest(), coatTexture() (+16 more)
 
 ### Community 54 - "transform.ts"
-Cohesion: 0.18
-Nodes (14): PageFrame, ARTWORK_POLICY, basePoint(), BUDGETS, planRender(), PlanResult, Purpose, Rect (+6 more)
+Cohesion: 0.19
+Nodes (14): BoxPreview(), renderRegion(), ARTWORK_POLICY, asRotation(), basePoint(), BUDGETS, planRender(), PlanResult (+6 more)
 
 ### Community 55 - "useProject"
-Cohesion: 0.19
-Nodes (26): PageRoleControls(), PagesSection(), ROLE_BADGE, SourcePages(), Thumbnail(), ThumbState, pageName(), usePageSummaries() (+18 more)
+Cohesion: 0.25
+Nodes (21): PageRoleControls(), pageName(), usePageSummaries(), FinishesSection(), FinishLookControls(), LayerEditor(), useAlphaUsable(), RegistrationView() (+13 more)
 
 ### Community 56 - "probe-relief.mjs"
 Cohesion: 0.23
@@ -278,59 +278,71 @@ Cohesion: 0.40
 Nodes (8): addPngText(), chunk(), crc32(), CRC_TABLE, latin1(), readPngText(), SIGNATURE, tinyPng()
 
 ### Community 58 - "Workspace.tsx"
-Cohesion: 0.15
-Nodes (15): clampPanelWidth(), PANEL_DEFAULT, PANEL_KEY_STEP, PANEL_MAX, PANEL_MIN, MainView(), PagesSummary(), Shell() (+7 more)
+Cohesion: 0.29
+Nodes (8): clampPanelWidth(), PANEL_DEFAULT, PANEL_KEY_STEP, PANEL_MAX, PANEL_MIN, MainView(), Shell(), Workspace()
 
 ### Community 59 - "webdriver.mjs"
 Cohesion: 0.48
 Nodes (6): call(), locate(), openApp(), PORT, sleep(), webview2Version()
 
-### Community 60 - "finishMaterial.ts"
+### Community 60 - "ProjectContext.tsx"
 Cohesion: 0.16
-Nodes (13): Captured, DEFAULT_RECIPES, FinishRecipe, Stock, STOCK_PRESETS, coatDigest(), coatTexture(), dataTexture() (+5 more)
+Nodes (16): discardRecovery(), Exported, locateSource(), openProject(), peekRecovery(), recoverProject(), saveProject(), saveRecovery() (+8 more)
 
-### Community 61 - "reliefWorker.test.ts"
-Cohesion: 0.21
-Nodes (10): heightProfile(), normalMap(), ReliefRequest, NearestRim, profileHeight(), ReliefProfile, setReliefWorkerFactory(), FakeWorker (+2 more)
+### Community 61 - "scene.tsx"
+Cohesion: 0.17
+Nodes (16): ExportSnapshot, FinishState, FrozenInputs, PageRef, PrintSurface, ProjectModel, CameraPose, Lighting (+8 more)
 
 ### Community 62 - "smoke-project.mjs"
-Cohesion: 0.48
-Nodes (5): readPng(), asideRecovery(), crashRecoveryChecks(), projectChecks(), recoverySlot()
+Cohesion: 0.39
+Nodes (7): readPng(), appData(), asideAppData(), asideRecovery(), crashRecoveryChecks(), projectChecks(), recoverySlot()
 
 ### Community 63 - "PageInspector.tsx"
-Cohesion: 0.24
-Nodes (13): mm(), noSizeText(), ORIGIN_TEXT, sizeText(), BoxPreview(), BoxTable(), OUTLINE, Overrides() (+5 more)
+Cohesion: 0.19
+Nodes (16): mm(), noSizeText(), ORIGIN_TEXT, sizeText(), BoxTable(), OUTLINE, PageInspector(), ROLES (+8 more)
 
-### Community 64 - "reliefWorker.ts"
-Cohesion: 0.33
-Nodes (9): BoundedRelief, Answer, ask(), buildNormalsOffThread(), buildReliefOffThread(), create(), fail(), instance() (+1 more)
+### Community 64 - "probe.ts"
+Cohesion: 0.18
+Nodes (8): loadPdfjs(), localDocumentParams(), openDocument(), OpenedDocument, probe, Region, RenderOptions, withDocument()
 
 ### Community 65 - "jobs.ts"
-Cohesion: 0.32
-Nodes (4): cache, clearFinishJobs(), FINISH_RESOLUTION, finishJob()
+Cohesion: 0.33
+Nodes (3): cache, clearFinishJobs(), FINISH_RESOLUTION
 
-### Community 66 - "mmPerUnit"
-Cohesion: 0.67
-Nodes (5): maskRegion(), mm1(), registrationWarnings(), mmPerUnit(), sizeMm()
+### Community 66 - "Rect"
+Cohesion: 0.23
+Nodes (9): OVERLAY_COLORS, maskRegion(), mm1(), PageFrame, registrationWarnings(), mmPerUnit(), Rect, OverrideRect (+1 more)
+
+### Community 68 - "layout.ts"
+Cohesion: 0.28
+Nodes (10): faceGeometry, fitDistance(), leafPlacements(), localFromUv(), Placement, planeUvs(), sizesDiffer(), spreadPlacements() (+2 more)
+
+### Community 69 - "SourcesSection.tsx"
+Cohesion: 0.28
+Nodes (7): bytesText(), CapabilityText(), PasswordForm(), SourceCard(), SourcesSection(), statusText(), LoadState
+
+### Community 70 - "log.ts"
+Cohesion: 0.39
+Nodes (6): clean(), clearDiagnostics(), DiagnosticEvent, events, jobId(), record()
 
 ## Knowledge Gaps
-- **286 isolated node(s):** `printWidth`, `endOfLine`, `{ version }`, `nextConfig`, `name` (+281 more)
+- **290 isolated node(s):** `printWidth`, `endOfLine`, `{ version }`, `nextConfig`, `name` (+285 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **8 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **10 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `label()` connect `reliefMesh.ts` to `probe-relief.mjs`?**
-  _High betweenness centrality (0.052) - this node is a cross-community bridge._
-- **Why does `ProjectStore` connect `ProjectStore` to `store.ts`, `.#begin`, `ProjectContext.tsx`, `store.test.ts`, `.save`?**
-  _High betweenness centrality (0.027) - this node is a cross-community bridge._
+  _High betweenness centrality (0.061) - this node is a cross-community bridge._
+- **Why does `ProjectStore` connect `ProjectStore` to `.#setFile`, `store.ts`, `.#begin`, `store.files.test.ts`, `store.test.ts`, `.save`, `ProjectContext.tsx`?**
+  _High betweenness centrality (0.023) - this node is a cross-community bridge._
 - **Why does `openApp()` connect `webdriver.mjs` to `probe-pdf.mjs`, `smoke.mjs`, `probe-relief.mjs`?**
-  _High betweenness centrality (0.013) - this node is a cross-community bridge._
+  _High betweenness centrality (0.017) - this node is a cross-community bridge._
 - **Are the 3 inferred relationships involving `makeDoc()` (e.g. with `.add()` and `.build()`) actually correct?**
   _`makeDoc()` has 3 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `printWidth`, `endOfLine`, `{ version }` to the rest of the system?**
-  _286 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _290 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `sync-plan-issues.mjs` be split into smaller, more focused modules?**
   _Cohesion score 0.09090909090909091 - nodes in this community are weakly interconnected._
 - **Should `compilerOptions` be split into smaller, more focused modules?**

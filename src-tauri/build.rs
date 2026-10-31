@@ -14,6 +14,9 @@ fn main() {
             "peek_recovery",
             "discard_recovery",
             "recover_project",
+            "list_approvals",
+            "forget_approval",
+            "forget_all_approvals",
         ]),
     ))
     .expect("failed to run tauri-build");

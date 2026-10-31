@@ -360,6 +360,13 @@ pub async fn inspect_geometry(
     password: Option<String>,
     registry: tauri::State<'_, crate::sources::SourceRegistry>,
 ) -> Result<GeometryReport, GeometryError> {
+    // Real passwords are short; a huge one is refused before anything is read.
+    if password.as_ref().is_some_and(|p| p.len() > 1024) {
+        return Err(error(
+            "invalidRequest",
+            "The password is longer than any PDF accepts.",
+        ));
+    }
     let bytes = registry.read(&handle).map_err(|e| GeometryError {
         code: e.code,
         message: e.message,

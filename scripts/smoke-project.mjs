@@ -902,15 +902,21 @@ export async function crashRecoveryChecks({ openApp, ok, expect, sleep, dialog, 
 
 /** This installation's recovery snapshot, in local app data. */
 export function recoverySlot() {
-  return join(process.env.LOCALAPPDATA, "com.manis.maskora", "recovery.json");
+  return appData("recovery.json");
+}
+
+/** A file in this installation's local app data folder. */
+export function appData(name) {
+  return join(process.env.LOCALAPPDATA, "com.manis.maskora", name);
 }
 
 /**
- * Keep a snapshot that was there before the run (it may be real unsaved work)
- * out of the smoke's way; `restore` deletes whatever the run left and puts it back.
+ * Keep a file that was in the app data folder before the run (real unsaved
+ * work, or the owner's own approvals) out of the smoke's way; `restore` deletes
+ * whatever the run left there and puts the original back.
  */
-export function asideRecovery() {
-  const slot = recoverySlot();
+export function asideAppData(name) {
+  const slot = appData(name);
   const aside = `${slot}.smoke-aside`;
   if (existsSync(slot) && !existsSync(aside)) renameSync(slot, aside);
   return {
@@ -920,3 +926,5 @@ export function asideRecovery() {
     },
   };
 }
+
+export const asideRecovery = () => asideAppData("recovery.json");

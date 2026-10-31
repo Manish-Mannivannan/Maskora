@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-forget-all-approvals"
+description = "Enables the forget_all_approvals command without any pre-configured scope."
+commands.allow = ["forget_all_approvals"]
+
+[[permission]]
+identifier = "deny-forget-all-approvals"
+description = "Denies the forget_all_approvals command without any pre-configured scope."
+commands.deny = ["forget_all_approvals"]

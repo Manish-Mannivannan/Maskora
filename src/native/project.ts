@@ -111,3 +111,24 @@ export function recoverProject(): Promise<Recovered | null> {
 export function discardRecovery(): Promise<void> {
   return invoke<void>("discard_recovery");
 }
+
+/** A file this installation recorded the user choosing; never its path. */
+export interface Approval {
+  id: string;
+  fileName: string;
+  size: number;
+  approvedUnix: number;
+}
+
+export function listApprovals(): Promise<Approval[]> {
+  return invoke<Approval[]>("list_approvals");
+}
+
+/** Forget one approval: that file needs approving again before a project reopens it. */
+export function forgetApproval(id: string): Promise<boolean> {
+  return invoke<boolean>("forget_approval", { id });
+}
+
+export function forgetAllApprovals(): Promise<void> {
+  return invoke<void>("forget_all_approvals");
+}

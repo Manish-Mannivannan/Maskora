@@ -1,3 +1,4 @@
+mod dialog_turn;
 mod geometry;
 mod project;
 mod recovery;
@@ -40,7 +41,10 @@ pub fn run() {
             recovery::save_recovery,
             recovery::peek_recovery,
             recovery::discard_recovery,
-            recovery::recover_project
+            recovery::recover_project,
+            trust::list_approvals,
+            trust::forget_approval,
+            trust::forget_all_approvals
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

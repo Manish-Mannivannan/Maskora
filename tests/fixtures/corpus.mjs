@@ -369,6 +369,88 @@ const M3 = () => {
   };
 };
 
+/**
+ * C1: active content that must stay inert (architecture §11.1). Script on open
+ * and on the page, a web link and a launch action, and an embedded file, each
+ * pointing at 127.0.0.1:9 (the discard port) or a local program, so any
+ * attempt to run or fetch would show in the request log or as a dialog.
+ */
+const C1 = () => {
+  const target = "http://127.0.0.1:9/c1";
+  const js = (code) => ({ Type: name("Action"), S: name("JavaScript"), JS: str(code) });
+  return {
+    pdf: makeDoc({
+      prepare: (pdf) => {
+        const openScript = pdf.add(
+          js(
+            `app.alert("C1 ran"); this.submitForm("${target}/submit"); app.launchURL("${target}/launch", true);`,
+          ),
+        );
+        const pageScript = pdf.add(js(`app.alert("C1 page opened"); this.getURL("${target}/page");`));
+        const attached = pdf.add(stream({ Type: name("EmbeddedFile") }, "attached text, never opened"));
+        const spec = pdf.add({
+          Type: name("Filespec"),
+          F: str("C1.txt"),
+          UF: str("C1.txt"),
+          EF: { F: ref(attached) },
+        });
+        const uri = pdf.add({
+          Type: name("Annot"),
+          Subtype: name("Link"),
+          Rect: [10, 150, 90, 190],
+          Border: [0, 0, 0],
+          A: { S: name("URI"), URI: str(`${target}/uri`) },
+        });
+        const launch = pdf.add({
+          Type: name("Annot"),
+          Subtype: name("Link"),
+          Rect: [110, 150, 190, 190],
+          Border: [0, 0, 0],
+          A: { S: name("Launch"), F: str("C:\Windows\System32\calc.exe") },
+        });
+        const attachment = pdf.add({
+          Type: name("Annot"),
+          Subtype: name("FileAttachment"),
+          Rect: [10, 10, 30, 30],
+          FS: ref(spec),
+          Name: name("PushPin"),
+        });
+        return { openScript, pageScript, spec, uri, launch, attachment };
+      },
+      catalog: (ctx) => ({
+        OpenAction: ref(ctx.openScript),
+        Names: {
+          JavaScript: { Names: [str("c1"), ref(ctx.openScript)] },
+          EmbeddedFiles: { Names: [str("C1.txt"), ref(ctx.spec)] },
+        },
+      }),
+      pages: [
+        {
+          dict: (ctx) => ({
+            MediaBox: [0, 0, 200, 200],
+            AA: { O: ref(ctx.pageScript) },
+            Annots: [ref(ctx.uri), ref(ctx.launch), ref(ctx.attachment)],
+          }),
+          content: fill([50, 50, 100, 80], [0.5, 0.5, 0.5]),
+        },
+      ],
+    }),
+    expected: {
+      description:
+        "Active content that must stay inert: document and page JavaScript, a URI link, a Launch link and an embedded file, all aimed at 127.0.0.1:9 or a local program",
+      pages: [{ index: 0, boxes: { MediaBox: [0, 0, 200, 200] }, grey: [50, 50, 100, 80] }],
+      activeContent: [
+        "OpenAction JavaScript",
+        "page AA JavaScript",
+        "URI link",
+        "Launch link",
+        "EmbeddedFiles + FileAttachment",
+      ],
+      mustStayInert: true,
+    },
+  };
+};
+
 const A1 = () => {
   const appearance = (pdf, color) =>
     pdf.add(
@@ -988,6 +1070,7 @@ export const CORPUS = {
   M2,
   M3,
   A1,
+  C1,
   O1,
   X1a,
   X1b,

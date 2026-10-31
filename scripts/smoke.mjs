@@ -26,8 +26,9 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { asideRecovery, crashRecoveryChecks, projectChecks } from "./smoke-project.mjs";
+import { asideAppData, asideRecovery, crashRecoveryChecks, projectChecks } from "./smoke-project.mjs";
 import { resourceChecks } from "./smoke-resources.mjs";
+import { securityChecks } from "./smoke-security.mjs";
 import { ROOT, openApp } from "./webdriver.mjs";
 
 const run = promisify(execFile);
@@ -43,8 +44,9 @@ function expect(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-// The run writes recovery snapshots of its own; a snapshot already there is kept aside and put back.
+// The run writes recovery snapshots and approvals of its own; what was already there is kept aside and put back.
 const recovery = asideRecovery();
+const approvals = asideAppData("authorized-sources.json");
 const app = await openApp();
 
 const data = async (name) =>
@@ -1074,6 +1076,9 @@ try {
     ROOT,
   });
 
+  // 2.3 — security boundary probes.
+  await securityChecks({ app, q, ok, expect, sleep, dialog, waitUntil, settled3d, faces3d, FIXTURES, ROOT });
+
   // Bypass the UI: call the IPC directly with things the user never selected.
   const refusals = await app.execAsync(`
     const done = arguments[arguments.length - 1];
@@ -1140,4 +1145,5 @@ if (!process.exitCode) {
   }
 }
 recovery.restore();
+approvals.restore();
 if (!process.exitCode) console.log(`smoke: ${passed} checks passed`);

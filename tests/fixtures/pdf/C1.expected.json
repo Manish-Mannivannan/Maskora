@@ -1,0 +1,31 @@
+{
+  "fixture": "C1",
+  "description": "Active content that must stay inert: document and page JavaScript, a URI link, a Launch link and an embedded file, all aimed at 127.0.0.1:9 or a local program",
+  "pages": [
+    {
+      "index": 0,
+      "boxes": {
+        "MediaBox": [
+          0,
+          0,
+          200,
+          200
+        ]
+      },
+      "grey": [
+        50,
+        50,
+        100,
+        80
+      ]
+    }
+  ],
+  "activeContent": [
+    "OpenAction JavaScript",
+    "page AA JavaScript",
+    "URI link",
+    "Launch link",
+    "EmbeddedFiles + FileAttachment"
+  ],
+  "mustStayInert": true
+}

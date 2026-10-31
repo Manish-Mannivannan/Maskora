@@ -12,6 +12,58 @@
 import { useEffect, useState } from "react";
 import { ReconcilePanel } from "./ReconcilePanel";
 import { diagnostics } from "@/diagnostics/log";
+import { forgetAllApprovals, forgetApproval, listApprovals, type Approval } from "@/native/project";
+
+/**
+ * The files this installation remembers the user choosing (architecture §11.2):
+ * names and times only, never paths. Forgetting one means the next project
+ * that uses it asks again.
+ */
+function Approvals() {
+  const [list, setList] = useState<Approval[] | null>(null);
+  const refresh = () => void listApprovals().then(setList, () => setList([]));
+  return (
+    <>
+      <button type="button" data-testid="approvals-show" onClick={refresh}>
+        Show approved files
+      </button>
+      {list ? (
+        list.length ? (
+          <>
+            <ul className="approvals" data-testid="approvals">
+              {list.map((a) => (
+                <li key={a.id} data-testid="approval" data-id={a.id} data-name={a.fileName}>
+                  <span>
+                    {a.fileName} · {(a.size / 1024).toFixed(1)} KB ·{" "}
+                    {new Date(a.approvedUnix * 1000).toLocaleString()}
+                  </span>
+                  <button
+                    type="button"
+                    data-testid="approval-forget"
+                    onClick={() => void forgetApproval(a.id).then(refresh)}
+                  >
+                    Forget
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              data-testid="approvals-forget-all"
+              onClick={() => void forgetAllApprovals().then(refresh)}
+            >
+              Forget all
+            </button>
+          </>
+        ) : (
+          <p className="hint" data-testid="approvals-empty">
+            No files are approved on this computer.
+          </p>
+        )
+      ) : null}
+    </>
+  );
+}
 
 /** The log as text, read when the panel is opened and refreshed on request. */
 function DiagnosticsText() {
@@ -267,6 +319,13 @@ export function ProjectSection() {
           {lastRefusal.message}
         </p>
       ) : null}
+      <details className="details" data-testid="approvals-panel">
+        <summary>Approved files</summary>
+        <p className="hint">
+          Files you chose on this computer, which projects may reopen without asking while they are unchanged.
+        </p>
+        <Approvals />
+      </details>
       <details className="details" data-testid="diagnostics-panel">
         <summary>Diagnostics</summary>
         <p className="hint">

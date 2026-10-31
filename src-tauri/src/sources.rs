@@ -142,6 +142,8 @@ pub async fn select_source(
     trust: tauri::State<'_, crate::trust::TrustStore>,
 ) -> Result<Option<SourceInfo>, SourceError> {
     use tauri_plugin_dialog::DialogExt;
+    let _turn = crate::dialog_turn::take()
+        .ok_or_else(|| SourceError::new("dialogBusy", crate::dialog_turn::BUSY))?;
     let picked = app
         .dialog()
         .file()
