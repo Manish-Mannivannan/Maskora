@@ -25,3 +25,6 @@ npm-debug.log*
 Thumbs.db
 desktop.ini
 *.swp
+
+# Real production files used for local measurement (Phase 2.5); never committed
+local-inputs/

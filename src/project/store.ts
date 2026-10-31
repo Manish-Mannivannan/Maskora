@@ -56,6 +56,7 @@ import {
   type Provenance,
 } from "./capability";
 import { mmPerUnit, type Rect } from "@/pdf/transform";
+import { record } from "@/diagnostics/log";
 import { diagnose, type Diagnostic, type PageOverride } from "./facts";
 import * as M from "./model";
 import {
@@ -417,6 +418,21 @@ export class ProjectStore {
   }
 
   #setFile(patch: Partial<FileState>) {
+    const last = patch.last;
+    if (last && last.kind !== "saving" && last.kind !== "opening" && last.kind !== "idle")
+      record({
+        kind: "file",
+        action:
+          last.kind === "saved"
+            ? "save"
+            : last.kind === "recovered"
+              ? "recover"
+              : last.kind === "opened"
+                ? "open"
+                : last.what,
+        outcome: last.kind,
+        ...(last.kind === "failed" ? { code: last.code } : {}),
+      });
     this.#set({ file: { ...this.#state.file, ...patch } });
   }
 
@@ -523,6 +539,7 @@ export class ProjectStore {
     const op = ++this.#loading;
     const current = () => op === this.#loading;
     const fail = (code: string, message: string) => {
+      record({ kind: "source", source: job?.id ?? "new", revision: 0, pages: 0, outcome: "failed", code });
       this.#set({ load: { kind: "failed", name: info.name, code, message } });
       if (job) {
         const r = this.#state.relink[job.id];
@@ -558,6 +575,14 @@ export class ProjectStore {
       const { code, message } = codeOf(error, "pdfReadFailed");
       if (code === "passwordNeeded" || code === "passwordWrong") {
         this.#pending = { info, bytes, job };
+        record({
+          kind: "source",
+          source: job?.id ?? "new",
+          revision: 0,
+          pages: 0,
+          outcome: "password",
+          code,
+        });
         this.#set({
           load: { kind: "password", name: info.name, attempt: code === "passwordWrong" ? "wrong" : "needed" },
         });
@@ -573,6 +598,7 @@ export class ProjectStore {
     const id = job?.id ?? this.#newId();
     const rev = ++this.#revisions;
     this.#sessions.set(id, { revision: rev, session });
+    record({ kind: "source", source: id, revision: rev, pages: session.pageCount, outcome: "added" });
     this.#handles.set(id, info.handle);
     const pdfjs: Provenance = { engine: session.engine, sourceRevision: rev };
     const view: SourceView = {

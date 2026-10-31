@@ -27,6 +27,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { asideRecovery, crashRecoveryChecks, projectChecks } from "./smoke-project.mjs";
+import { resourceChecks } from "./smoke-resources.mjs";
 import { ROOT, openApp } from "./webdriver.mjs";
 
 const run = promisify(execFile);
@@ -1053,6 +1054,22 @@ try {
     registered,
     overlayAt,
     data,
+    FIXTURES,
+    ROOT,
+  });
+
+  // 2.2 — resource budgets and failure handling.
+  await resourceChecks({
+    app,
+    q,
+    ok,
+    expect,
+    sleep,
+    dialog,
+    waitUntil,
+    choose,
+    settled3d,
+    faces3d,
     FIXTURES,
     ROOT,
   });

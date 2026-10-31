@@ -628,13 +628,28 @@ pub struct Exported {
     bytes: usize,
 }
 
-/// Refuse anything that is not a PNG of an accepted size.
+/// The hard limit on an exported still's side in pixels (architecture §17.3); the interface offers less.
+const MAX_EXPORT_SIDE: u32 = 16_384;
+
+/// Refuse anything that is not a PNG of an accepted size, judged from its header.
 fn check_png(png: &[u8]) -> Result<(), ProjectError> {
     const SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
-    if png.len() > MAX_EXPORT_BYTES || !png.starts_with(&SIGNATURE) {
+    if png.len() > MAX_EXPORT_BYTES
+        || !png.starts_with(&SIGNATURE)
+        || png.len() < 24
+        || &png[12..16] != b"IHDR"
+    {
         return Err(err(
             "invalidImage",
             "The export is not a PNG image of an accepted size.",
+        ));
+    }
+    let side = |at: usize| u32::from_be_bytes([png[at], png[at + 1], png[at + 2], png[at + 3]]);
+    let (width, height) = (side(16), side(20));
+    if width == 0 || height == 0 || width > MAX_EXPORT_SIDE || height > MAX_EXPORT_SIDE {
+        return Err(err(
+            "exportTooLarge",
+            format!("A {width} × {height} px image is beyond the {MAX_EXPORT_SIDE} px limit."),
         ));
     }
     Ok(())
@@ -775,7 +790,7 @@ mod tests {
         let mut perms = std::fs::metadata(&path).unwrap().permissions();
         perms.set_readonly(true);
         std::fs::set_permissions(&path, perms.clone()).unwrap();
-        let e = write_png(&path, &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 1]).unwrap_err();
+        let e = write_png(&path, &png_header(1, 1)).unwrap_err();
         assert_eq!(e.code, "permissionDenied");
         assert_eq!(
             std::fs::read(&path).unwrap(),
@@ -796,12 +811,9 @@ mod tests {
         perms.set_readonly(false);
         std::fs::set_permissions(&path, perms).unwrap();
         assert_eq!(
-            write_png(
-                &dir.join("missing-folder/x.png"),
-                &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]
-            )
-            .unwrap_err()
-            .code,
+            write_png(&dir.join("missing-folder/x.png"), &png_header(1, 1))
+                .unwrap_err()
+                .code,
             "writeFailed"
         );
         assert_eq!(
@@ -811,6 +823,33 @@ mod tests {
             "invalidImage"
         );
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// A PNG signature and IHDR of the given size, enough for the header check.
+    fn png_header(width: u32, height: u32) -> Vec<u8> {
+        let mut v = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13];
+        v.extend_from_slice(b"IHDR");
+        v.extend_from_slice(&width.to_be_bytes());
+        v.extend_from_slice(&height.to_be_bytes());
+        v.extend_from_slice(&[8, 6, 0, 0, 0, 0, 0, 0, 0]);
+        v
+    }
+
+    #[test]
+    fn exports_beyond_the_hard_pixel_limit_are_refused_from_the_header() {
+        assert!(check_png(&png_header(16_384, 9_000)).is_ok());
+        assert_eq!(
+            check_png(&png_header(16_385, 10)).unwrap_err().code,
+            "exportTooLarge"
+        );
+        assert_eq!(
+            check_png(&png_header(10, 0)).unwrap_err().code,
+            "exportTooLarge"
+        );
+        assert_eq!(
+            check_png(&png_header(1, 1)[..20]).unwrap_err().code,
+            "invalidImage"
+        );
     }
 
     #[cfg(windows)]
@@ -826,7 +865,7 @@ mod tests {
             .share_mode(0)
             .open(&path)
             .unwrap();
-        let e = write_png(&path, &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]).unwrap_err();
+        let e = write_png(&path, &png_header(1, 1)).unwrap_err();
         assert_eq!(e.code, "permissionDenied", "{e:?}");
         drop(held);
         assert_eq!(std::fs::read(&path).unwrap(), b"old");

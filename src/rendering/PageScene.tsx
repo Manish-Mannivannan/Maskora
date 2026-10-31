@@ -18,7 +18,8 @@ import * as THREE from "three";
 import type { RegistrationResult } from "@/finish/pipeline";
 import { latestOnly } from "@/finish/jobs";
 import type { BoundedRelief, ReliefShape } from "@/finish/reliefMesh";
-import { buildReliefOffThread } from "@/finish/reliefWorker";
+import { record, type LoggedEvent } from "@/diagnostics/log";
+import { buildNormalsOffThread, buildReliefOffThread } from "@/finish/reliefWorker";
 import type { FinishRecipe } from "@/project/model";
 import { mmPerUnit, toDevice, type Rect } from "@/pdf/transform";
 import {
@@ -26,7 +27,7 @@ import {
   coatDigest,
   coatTexture,
   faceMaterial,
-  reliefTexture,
+  reliefTextureFrom,
   type FinishLook,
 } from "./finishMaterial";
 import { localFromUv, planeUvs, type FaceGeometry, type Placement } from "./layout";
@@ -59,6 +60,8 @@ export interface ReliefStats {
   estimated?: number;
   /** Set when the mesh could not be built within budget and normals were drawn instead. */
   fallback?: string;
+  /** Set when raised UV could not be drawn at all (the relief worker failed); nothing is drawn for it. */
+  failed?: string;
   /** The recipe the relief was built from, so a stale build can be recognised. */
   profile: { heightUm: number; bevelMm: number; crownUm: number };
   /** Digest of the finish maps it was built from. */
@@ -74,11 +77,14 @@ export interface FaceEntry {
   stats: ReliefStats | null;
 }
 
-/** The raised-UV normal map and how long it took to build. */
-function timedReliefTexture(result: RegistrationResult, recipe: FinishRecipe) {
-  const t0 = performance.now();
-  const texture = reliefTexture(result, recipe);
-  return { texture, ms: performance.now() - t0 };
+/** A raised-UV normal map built in the worker, for the raster and profile it was built from. */
+interface Normals {
+  result: RegistrationResult;
+  profile: string;
+  texture: THREE.DataTexture | null;
+  ms: number;
+  /** Set when the worker could not build it. */
+  failed?: string;
 }
 
 const profileOf = (r: FinishRecipe) => ({ heightUm: r.heightUm, bevelMm: r.bevelMm, crownUm: r.crownUm });
@@ -200,7 +206,24 @@ export function Face({
             if (live && r.current)
               setCoating(coatingGeometry(result, geo, raisedRecipe, r.value.result, r.value.ms));
           },
-          () => undefined,
+          (error: Error) => {
+            // A failed worker falls back to normals, and says why; it never leaves raised UV silently missing.
+            if (live)
+              setCoating(
+                coatingGeometry(
+                  result,
+                  geo,
+                  raisedRecipe,
+                  {
+                    mesh: null,
+                    step: 1,
+                    estimated: 0,
+                    reason: `the geometry worker failed (${error.message})`,
+                  },
+                  0,
+                ),
+              );
+          },
         );
     }, COATING_DEBOUNCE_MS);
     return () => {
@@ -215,11 +238,43 @@ export function Face({
 
   // Normals: the chosen mode, or the fallback when a mesh could not be built within budget.
   const needNormals = hasRaised && (look.raisedMode === "normals" || fallback);
-  const timedRelief = useMemo(
-    () => (needNormals ? timedReliefTexture(result, raisedRecipe) : null),
-    [needNormals, result, raisedRecipe],
-  );
-  const relief = timedRelief?.texture ?? null;
+  // Built in the worker too (it used to stall the window for about 0.5 s on a detailed mask), after edits settle.
+  const profileKey = JSON.stringify(profileOf(raisedRecipe));
+  const [normals, setNormals] = useState<Normals | null>(null);
+  const latestNormals = useRef(latestOnly<{ data: Uint8Array; ms: number }>());
+  useEffect(() => {
+    if (!needNormals) return;
+    let live = true;
+    const timer = setTimeout(() => {
+      const { raisedUv, width, height } = result.maps;
+      latestNormals
+        .current(buildNormalsOffThread(raisedUv, width, height, result.pxPerMm, profileOf(raisedRecipe)))
+        .then(
+          (r) => {
+            if (live && r.current)
+              setNormals({
+                result,
+                profile: profileKey,
+                texture: reliefTextureFrom(r.value.data, width, height),
+                ms: r.value.ms,
+              });
+          },
+          (error: Error) => {
+            if (live)
+              setNormals({ result, profile: profileKey, texture: null, ms: 0, failed: error.message });
+          },
+        );
+    }, COATING_DEBOUNCE_MS);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [needNormals, result, raisedRecipe, profileKey]);
+  useEffect(() => () => normals?.texture?.dispose(), [normals]);
+  // Only a normal map of this raster and profile is drawn: never one for older settings.
+  const currentNormals =
+    needNormals && normals?.result === result && normals.profile === profileKey ? normals : null;
+  const relief = currentNormals?.texture ?? null;
 
   const artwork = useMemo(() => artworkTexture(result), [result]);
   const coatingMaterial = useMemo(
@@ -253,7 +308,6 @@ export function Face({
   }, [geo]);
 
   useEffect(() => () => artwork.dispose(), [artwork]);
-  useEffect(() => () => relief?.dispose(), [relief]);
   useEffect(() => () => coat.dispose(), [coat]);
   useEffect(() => () => material.dispose(), [material]);
   useEffect(() => () => plane.dispose(), [plane]);
@@ -261,10 +315,10 @@ export function Face({
 
   const stats = useMemo<ReliefStats | null>(() => {
     if (current && !fallback) return current.stats;
-    if (!relief || !timedRelief) return null;
+    if (!currentNormals) return null;
     return {
       mode: "normals",
-      ms: timedRelief.ms,
+      ms: currentNormals.ms,
       bytes: result.maps.width * result.maps.height * 4,
       triangles: 0,
       vertices: 0,
@@ -272,20 +326,22 @@ export function Face({
       profile: profileOf(raisedRecipe),
       digest: result.digest,
       ...(fallback ? { fallback: current?.stats.fallback } : {}),
+      ...(currentNormals.failed ? { failed: currentNormals.failed } : {}),
     };
-  }, [
-    current,
-    fallback,
-    relief,
-    timedRelief,
-    result.maps.width,
-    result.maps.height,
-    result.digest,
-    raisedRecipe,
-  ]);
+  }, [current, fallback, currentNormals, result.maps.width, result.maps.height, result.digest, raisedRecipe]);
 
   useEffect(() => {
     onRelief?.(input.name, stats);
+    if (stats)
+      record({
+        kind: "relief",
+        face: input.name,
+        digest: stats.digest,
+        mode: stats.mode,
+        ms: stats.ms,
+        triangles: stats.triangles,
+        outcome: stats.failed ? "failed" : stats.fallback ? "fallback" : "built",
+      });
   }, [onRelief, input.name, stats]);
 
   useEffect(() => {
@@ -342,7 +398,12 @@ export function StockEdge({
 
 declare global {
   interface Window {
-    __maskora?: { cspViolations: string[]; scene?: SceneProbeApi; lastExport?: ExportProbe };
+    __maskora?: {
+      cspViolations: string[];
+      scene?: SceneProbeApi;
+      lastExport?: ExportProbe;
+      diagnostics?: () => LoggedEvent[];
+    };
   }
 }
 

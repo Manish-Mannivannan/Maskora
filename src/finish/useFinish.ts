@@ -13,6 +13,7 @@ import type { PageOverride } from "@/project/facts";
 import { layerProblem, pageKey, type PrintSurface, type ProjectModel } from "@/project/model";
 import { useProject } from "@/project/ProjectContext";
 import { blockedSources } from "@/project/store";
+import { jobId, record } from "@/diagnostics/log";
 import { FINISH_RESOLUTION, finishJob, latestOnly } from "./jobs";
 import { frameOf, runRegistration, type LayerInput, type RegistrationResult } from "./pipeline";
 
@@ -105,7 +106,9 @@ export function useFinish(surface: PrintSurface | null | undefined, frozen?: Fro
       if (session) inputs.push({ layer, mask: { session, summary } });
     }
     // Rapid edits (a dragged slider) settle before a job starts; the shared job itself is never aborted.
+    const revisions = [job.artSource.revision, ...job.layers.map((l) => l.src.revision)];
     const timer = setTimeout(() => {
+      const started = performance.now();
       const request = finishJob(job.key, () =>
         runRegistration(
           job.surface,
@@ -118,11 +121,31 @@ export function useFinish(surface: PrintSurface | null | undefined, frozen?: Fro
       latest.current(request).then(
         (r) => {
           if (!r.current) return;
+          record({
+            kind: "finish",
+            job: jobId(job.key),
+            surface: job.surface.id,
+            revisions,
+            digest: r.value.digest,
+            ms: performance.now() - started,
+            outcome: "ready",
+          });
           setSettled({ key: job.key, state: { status: "ready", result: r.value } });
           setLast(r.value);
         },
-        (e: Error) =>
-          setSettled({ key: job.key, state: { status: "failed", message: e?.message ?? String(e) } }),
+        (e: Error) => {
+          record({
+            kind: "finish",
+            job: jobId(job.key),
+            surface: job.surface.id,
+            revisions,
+            digest: "none",
+            ms: performance.now() - started,
+            outcome: "failed",
+            code: (e as { code?: string })?.code ?? "renderFailed",
+          });
+          setSettled({ key: job.key, state: { status: "failed", message: e?.message ?? String(e) } });
+        },
       );
     }, 120);
     return () => clearTimeout(timer);

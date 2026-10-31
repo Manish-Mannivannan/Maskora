@@ -103,6 +103,8 @@ const sameProfile = (s: ReliefStats, look: FinishLook) =>
 function reliefCurrent(face: FaceInput, stats: ReliefStats | undefined, look: FinishLook) {
   if (!drawsRaised(face, look)) return true;
   if (!stats || stats.digest !== face.result.digest || !sameProfile(stats, look)) return false;
+  // A failed build is final for these settings; the export stops on it rather than waiting.
+  if (stats.failed) return true;
   return look.raisedMode === "mesh" ? stats.mode === "mesh" : stats.mode === "normals";
 }
 
@@ -269,10 +271,20 @@ export function ExportStage({
   );
   const reliefReady = finishesReady && faces.every((f) => reliefCurrent(f, stats[f.name], look));
   const registry = useMemo<FaceRegistry>(() => new Map(), []);
+  // Whether a context loss still matters: the canvas drops its own context when it closes after capturing.
+  const watching = useRef(true);
+  useEffect(
+    () => () => {
+      watching.current = false;
+    },
+    [],
+  );
 
+  const reliefFailure = faces.map((f) => stats[f.name]?.failed).find(Boolean);
   // Stop with the reason when something it needs cannot be drawn.
-  const problem =
-    expected === 0 || (slots.layout === "spread" && (!slots.a || !slots.b))
+  const problem = reliefFailure
+    ? `Raised UV could not be drawn for the export: ${reliefFailure}.`
+    : expected === 0 || (slots.layout === "spread" && (!slots.a || !slots.b))
       ? "Nothing to export: choose the printed pages the view shows."
       : (
           finishes.find((f) => f.status === "blocked" || f.status === "failed") as
@@ -301,6 +313,7 @@ export function ExportStage({
   const handleEncoding = useCallback(() => onStep("encoding"), [onStep]);
   const handleCaptured = useCallback(
     (c: Omit<Captured, "probe"> & { project: ExportProbe["project"] }) => {
+      watching.current = false;
       const pages = faces.map((f, i) => {
         const surface = i === 0 ? slots.a : slots.b;
         return `${f.name}: ${surface ? pageName(sources, summaries, surface.artwork) : "?"} (${surface?.box ?? "?"})`;
@@ -368,6 +381,11 @@ export function ExportStage({
         onCreated={({ gl }) => {
           gl.toneMapping = THREE.NeutralToneMapping;
           gl.setClearColor(0x000000, 0);
+          // A device reset mid-export would capture an empty or partial image: stop instead.
+          gl.domElement.addEventListener("webglcontextlost", () => {
+            if (watching.current)
+              onError("graphicsLost", "The graphics device reset during the export. Try again.");
+          });
         }}
       >
         <SceneContent

@@ -15,6 +15,7 @@ import { PageInspector } from "@/features/document/PageInspector";
 import { PagesSection } from "@/features/document/PagesSection";
 import { ExportSection } from "@/features/export/ExportSection";
 import { ProjectSection } from "@/features/project/ProjectSection";
+import { diagnostics } from "@/diagnostics/log";
 import { ProjectProvider, useProject } from "@/project/ProjectContext";
 import { normalizeAngles, type LightAngles } from "@/rendering/lighting";
 import type { CameraPreset, InteractionMode } from "@/rendering/Viewport";
@@ -80,6 +81,8 @@ function Shell() {
   // Record content-security-policy violations so a smoke run can prove none occurred.
   useEffect(() => {
     window.__maskora ??= { cspViolations: [] };
+    // Read-only, for the native smoke and for copying from the Project panel; it never holds names or paths.
+    window.__maskora.diagnostics = diagnostics;
     const record = (e: SecurityPolicyViolationEvent) =>
       window.__maskora?.cspViolations.push(`${e.effectiveDirective} ${e.blockedURI}`);
     document.addEventListener("securitypolicyviolation", record);

@@ -11,6 +11,26 @@
  */
 import { useEffect, useState } from "react";
 import { ReconcilePanel } from "./ReconcilePanel";
+import { diagnostics } from "@/diagnostics/log";
+
+/** The log as text, read when the panel is opened and refreshed on request. */
+function DiagnosticsText() {
+  const [text, setText] = useState("");
+  const refresh = () =>
+    setText(
+      diagnostics()
+        .map((e) => JSON.stringify(e))
+        .join("\n"),
+    );
+  return (
+    <>
+      <button type="button" data-testid="diagnostics-refresh" onClick={refresh}>
+        Show recent events
+      </button>
+      {text ? <textarea className="diagnostics-text" readOnly rows={8} value={text} /> : null}
+    </>
+  );
+}
 import { useProject } from "@/project/ProjectContext";
 import type { FileState, Relink } from "@/project/store";
 
@@ -247,6 +267,14 @@ export function ProjectSection() {
           {lastRefusal.message}
         </p>
       ) : null}
+      <details className="details" data-testid="diagnostics-panel">
+        <summary>Diagnostics</summary>
+        <p className="hint">
+          What ran and how it ended, by source id, revision and coverage digest: no file names, paths or
+          document content. Select and copy it to report a problem.
+        </p>
+        <DiagnosticsText />
+      </details>
       <p className="hint">
         The project file records sources by name, location and content digest, never their content. Sources
         you chose on this computer reopen without asking while they are unchanged.

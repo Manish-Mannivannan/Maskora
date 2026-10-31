@@ -67,6 +67,11 @@ export function coatTexture(result: RegistrationResult, look: Pick<FinishLook, "
   return dataTexture(data, width, height);
 }
 
+/** A normal map the relief worker built, as a texture. */
+export function reliefTextureFrom(data: Uint8Array, width: number, height: number) {
+  return dataTexture(data, width, height);
+}
+
 /** The raised-UV normal map, or null when there is no raised coverage. */
 export function reliefTexture(result: RegistrationResult, recipe: FinishRecipe) {
   const { width, height, raisedUv } = result.maps;

@@ -27,6 +27,7 @@ import * as THREE from "three";
 import { usePageSummaries, pageName } from "@/features/document/usePages";
 import { useFinish } from "@/finish/useFinish";
 import { FINISH_NAMES, type PrintSurface } from "@/project/model";
+import { record } from "@/diagnostics/log";
 import { useProject } from "@/project/ProjectContext";
 import type { CameraPose } from "@/project/projectFile";
 import type { FinishLook } from "./finishMaterial";
@@ -67,6 +68,9 @@ export default function Viewport({ mode, camera }: ViewportProps) {
   const sun = useRef<THREE.DirectionalLight>(null);
   const drag = useRef<{ x: number; y: number; start: LightAngles } | null>(null);
   const [aspect, setAspect] = useState(1.5);
+  // The graphics context: "ok", or "lost" until the browser gives it back. Each restore rebuilds the scene's content,
+  // because render targets (the built environment, shadow maps) do not survive a loss.
+  const [gl, setGl] = useState<{ state: "ok" | "lost"; generation: number }>({ state: "ok", generation: 0 });
   /** The last opened project whose camera has been applied for good. */
   const restored = useRef(0);
   const restoring = Object.values(relink).some((r) => r.status === "loading");
@@ -189,6 +193,11 @@ export default function Viewport({ mode, camera }: ViewportProps) {
   const notes: { code: string; text: string }[] = [];
   if (slots.layout === "spread" && (!slots.a || !slots.b))
     notes.push({ code: "spreadIncomplete", text: "Choose the left and right printed pages in View." });
+  if (gl.state === "lost")
+    notes.push({
+      code: "graphicsLost",
+      text: "The graphics device reset, so the 3D preview is unavailable; it rebuilds when the device returns. Your work is unaffected.",
+    });
   if (faces.length === 2 && sizesDiffer(faces[0].geometry.size, faces[1].geometry.size))
     notes.push({
       code: "unequalSizes",
@@ -206,7 +215,12 @@ export default function Viewport({ mode, camera }: ViewportProps) {
   const hasRaised = faces.some((f) => f.result.maps.raisedUv.some((v) => v > 0));
   const shownRelief = faces.map((f) => relief[f.name]).filter((s): s is ReliefStats => !!s);
   for (const s of shownRelief) {
-    if (s.fallback)
+    if (s.failed)
+      notes.push({
+        code: "reliefFailed",
+        text: `${FINISH_NAMES.raisedUv} could not be drawn: ${s.failed}. The rest of the page is shown.`,
+      });
+    else if (s.fallback)
       notes.push({
         code: "reliefFallback",
         text: `${FINISH_NAMES.raisedUv} drawn with surface normals instead of geometry: ${s.fallback}.`,
@@ -231,6 +245,8 @@ export default function Viewport({ mode, camera }: ViewportProps) {
       data-mode={mode}
       data-faces={faces.map((f) => f.name).join(",")}
       data-busy={busy}
+      data-gl={gl.state}
+      data-gl-generation={gl.generation}
       data-environment={lighting.environmentDeg}
       style={{ cursor: mode === "light" ? "crosshair" : "grab" }}
       onPointerDown={(e) => {
@@ -252,13 +268,23 @@ export default function Viewport({ mode, camera }: ViewportProps) {
         dpr={[1, 2]}
         camera={{ position: CAMERA_START, fov: FOV, near: 0.01, far: 20 }}
         gl={{ preserveDrawingBuffer: true }}
-        onCreated={({ gl }) => {
+        onCreated={({ gl: renderer }) => {
           // Neutral tone mapping keeps the artwork's colours, where the default filmic curve shifts them.
-          gl.toneMapping = THREE.NeutralToneMapping;
+          renderer.toneMapping = THREE.NeutralToneMapping;
           recordCamera();
+          const canvas = renderer.domElement;
+          canvas.addEventListener("webglcontextlost", () => {
+            record({ kind: "graphics", state: "lost" });
+            setGl((g) => ({ ...g, state: "lost" }));
+          });
+          canvas.addEventListener("webglcontextrestored", () => {
+            record({ kind: "graphics", state: "restored" });
+            setGl((g) => ({ state: "ok", generation: g.generation + 1 }));
+          });
         }}
       >
         <SceneContent
+          key={gl.generation}
           faces={faces}
           look={look}
           layout={slots.layout}

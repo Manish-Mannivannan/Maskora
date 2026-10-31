@@ -8,7 +8,8 @@
  * back). PNG only: JPEG waits until its background and colour handling is
  * verified. Source files are never written.
  */
-import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { record } from "@/diagnostics/log";
 import { addPngText } from "@/export/pngText";
 import { exportPng } from "@/native/project";
 import { useProject } from "@/project/ProjectContext";
@@ -81,6 +82,14 @@ export function ExportSection() {
 
   const start = () => {
     if (running || problem) return;
+    if (document.querySelector<HTMLElement>('[data-testid="viewport"]')?.dataset.gl === "lost") {
+      setProgress({
+        kind: "failed",
+        code: "graphicsLost",
+        message: "The graphics device is resetting; export once the 3D preview is back.",
+      });
+      return;
+    }
     const id = (jobs.current += 1);
     setProgress({ kind: "preparing" });
     setSnapshot({
@@ -149,6 +158,25 @@ export function ExportSection() {
     },
     [state.file.name, state.sources],
   );
+
+  // Each export's outcome goes to the diagnostics log with the coverage digests and source revisions it used.
+  const revisions = useRef<number[]>([]);
+  useEffect(() => {
+    revisions.current = state.sources.map((s) => s.revision);
+  }, [state.sources]);
+  useEffect(() => {
+    if (progress.kind !== "saved" && progress.kind !== "cancelled" && progress.kind !== "failed") return;
+    const saved = progress.kind === "saved";
+    record({
+      kind: "export",
+      export: jobs.current,
+      digests: saved ? (window.__maskora?.lastExport?.faces.map((f) => f.digest) ?? []) : [],
+      revisions: revisions.current,
+      size: saved ? [progress.width, progress.height] : [0, 0],
+      outcome: progress.kind,
+      ...(progress.kind === "failed" ? { code: progress.code } : {}),
+    });
+  }, [progress]);
 
   const cancel = () => {
     if (!snapshot) return;
