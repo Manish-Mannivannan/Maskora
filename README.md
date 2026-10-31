@@ -45,18 +45,66 @@ Starts `next dev` on `http://localhost:3000` and opens the Maskora window on it.
 npm run check
 ```
 
-Runs, in order: the secret scan and ADR-citation check, Prettier, ESLint, TypeScript, the Vitest suite
+Runs, in order: the secret scan, ADR-citation, version and fixture checks, Prettier, ESLint, TypeScript, the Vitest suite
 (including the fixture determinism check), and `cargo fmt`, `clippy -D warnings` and `cargo test` for
 `src-tauri`. The pre-push hook runs the same command; the pre-commit hook runs the convention checks.
 
-## Build
+## Native smoke
+
+```powershell
+npx tauri build --debug --no-bundle    # embeds out/ and the production CSP
+npm run smoke
+```
+
+Drives the built app in its real WebView2 window through `tauri-driver` and `msedgedriver` (matched to the
+installed WebView2 runtime), answering native dialogs with `scripts/dialog.ps1`. Screenshots land in
+`probe-out/smoke/` and are meant to be read. The run sets aside the app's own recovery snapshot and
+approvals record and restores them afterwards; while it runs it uses the clipboard to answer dialogs.
+
+## Build and install
 
 ```powershell
 npm run tauri build
 ```
 
-`next build` writes the static export to `out/`, which Tauri bundles into the installer under
-`src-tauri/target/release/bundle/`.
+`next build` writes the static export to `out/`; Tauri embeds it and writes an unsigned, per-user NSIS
+installer to `src-tauri/target/release/bundle/nsis/`. The first build downloads the NSIS tools; installing
+needs no network on Windows 11, whose WebView2 runtime is already present (on a machine without it the
+installer would fetch it). Windows SmartScreen warns about the unsigned installer; that is accepted for
+personal use. The app installs to `%LOCALAPPDATA%\Maskora`.
+
+## Offline check
+
+```powershell
+# install the build, then disconnect every network connection
+npm run offline-check
+# reconnect; read probe-out/offline/<time>/report.md
+```
+
+Runs the installed app through import, mapping, finishes, save, silent reopen, PNG export, the active-content
+fixture and the request log, and records whether the machine really was offline.
+
+## Licenses
+
+```powershell
+npm run licenses
+```
+
+Writes `probe-out/licenses/inventory.md` for the npm production tree, the Rust crates the app links and the
+bundled PDF.js resources, and fails on any license that is neither accepted nor reviewed in the script.
+
+## Data and limits
+
+- Source PDFs are only read. The app writes projects (`.maskora.json`, atomically, with a copy of an
+  older-schema file kept beside it the first time it is upgraded) and exported PNGs where you choose.
+- In `%LOCALAPPDATA%\com.manis.maskora\`: `authorized-sources.json` (the files you chose, by path and
+  digest; review or forget them in Project → Approved files) and `recovery.json` (unsaved work, offered back
+  after a crash). Neither ever goes into a project or an export.
+- Limits: sources up to 1 GiB; projects up to 32 MiB; interactive page renders up to 4,096 px; exports up to
+  8,192 px per side (native code refuses anything over 16,384 px); a raised-UV coating up to 300,000 triangles per face
+  (simplified or drawn as surface normals beyond that); passwords up to 1,024 bytes; 2,000 remembered
+  approvals.
+- Real production files used for local measurement go in `local-inputs/`, which git ignores.
 
 ## Fixtures
 
