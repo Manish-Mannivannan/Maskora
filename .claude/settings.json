@@ -28,5 +28,10 @@
     "claude-code-setup@claude-plugins-official": true,
     "supabase@claude-plugins-official": false,
     "eodhd-api@eodhd-claude-skills": false
+  },
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
   }
 }

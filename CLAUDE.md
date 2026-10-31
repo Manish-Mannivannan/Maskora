@@ -2,6 +2,15 @@ The repository instruction set is AGENTS.md:
 
 @AGENTS.md
 
+## Commit attribution
+
+- Do not add `Co-Authored-By` trailers.
+- Do not add Claude, Anthropic, AI or assistant attribution to commits or pull requests.
+- Do not add Claude session URLs to commits or pull requests.
+- A commit message contains only the intended message, unless the maintainer explicitly asks otherwise.
+
+`.claude/settings.json` sets `attribution` to empty so Claude Code adds none of these itself.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
