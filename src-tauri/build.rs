@@ -6,6 +6,10 @@ fn main() {
             "select_source",
             "read_source",
             "inspect_geometry",
+            "save_project",
+            "open_project",
+            "locate_source",
+            "export_png",
         ]),
     ))
     .expect("failed to run tauri-build");

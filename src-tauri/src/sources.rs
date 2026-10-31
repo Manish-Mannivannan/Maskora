@@ -52,14 +52,18 @@ pub struct SourceRegistry {
 }
 
 /// 128 random bits from the standard library's per-process hasher keys.
-fn new_handle() -> String {
+pub fn random_hex() -> String {
     let mut parts = [0u64; 2];
     for part in &mut parts {
         let mut hasher = RandomState::new().build_hasher();
         hasher.write_u64(0x6d61_736b_6f72_6121);
         *part = hasher.finish();
     }
-    format!("src-{:016x}{:016x}", parts[0], parts[1])
+    format!("{:016x}{:016x}", parts[0], parts[1])
+}
+
+fn new_handle() -> String {
+    format!("src-{}", random_hex())
 }
 
 impl SourceRegistry {
@@ -88,6 +92,15 @@ impl SourceRegistry {
             name,
             size: meta.len(),
         })
+    }
+
+    /// The path behind a handle, for native use only (project references); never sent to the frontend.
+    pub fn path_of(&self, handle: &str) -> Option<PathBuf> {
+        self.paths
+            .lock()
+            .expect("source registry lock poisoned")
+            .get(handle)
+            .cloned()
     }
 
     /// Read a source by handle. Unknown handles are refused.
@@ -126,6 +139,7 @@ impl SourceRegistry {
 pub async fn select_source(
     app: tauri::AppHandle,
     registry: tauri::State<'_, SourceRegistry>,
+    trust: tauri::State<'_, crate::trust::TrustStore>,
 ) -> Result<Option<SourceInfo>, SourceError> {
     use tauri_plugin_dialog::DialogExt;
     let picked = app
@@ -140,7 +154,22 @@ pub async fn select_source(
     let path = file
         .into_path()
         .map_err(|_| SourceError::new("sourceUnreadable", "The selection is not a local file."))?;
-    registry.authorize(&path).map(Some)
+    authorize_and_remember(&path, &registry, &trust).map(|(info, _)| Some(info))
+}
+
+/// Authorize a path the user just selected, and record the selection with its
+/// content digest so a later reopen of the same, unchanged file needs no new dialog.
+/// Returns the source and that digest.
+pub fn authorize_and_remember(
+    path: &Path,
+    registry: &SourceRegistry,
+    trust: &crate::trust::TrustStore,
+) -> Result<(SourceInfo, String), SourceError> {
+    let info = registry.authorize(path)?;
+    let (sha, size) = crate::trust::hash_file(path, MAX_SOURCE_BYTES)
+        .map_err(|_| SourceError::new("sourceUnreadable", "The selected file cannot be read."))?;
+    trust.remember(path, &sha, size);
+    Ok((info, sha))
 }
 
 /// The bytes of an authorized source, sent as a raw binary response.

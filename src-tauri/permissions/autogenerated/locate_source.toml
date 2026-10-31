@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-locate-source"
+description = "Enables the locate_source command without any pre-configured scope."
+commands.allow = ["locate_source"]
+
+[[permission]]
+identifier = "deny-locate-source"
+description = "Denies the locate_source command without any pre-configured scope."
+commands.deny = ["locate_source"]

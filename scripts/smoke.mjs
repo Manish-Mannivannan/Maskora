@@ -13,7 +13,9 @@
  *   - the native dialog authorizes a file whose bytes then reach PDF.js, and a
  *     cancelled dialog reads as cancelled;
  *   - with the UI bypassed, an unselected path, the dialog plugin and the old
- *     opener plugin are all refused;
+ *     opener plugin are all refused, and so are a save naming an unselected
+ *     source and an export that is not a PNG;
+ *   - saving, reopening, relinking and still export (smoke-project.mjs);
  *   - nothing is requested from outside the app's origin, and an external fetch is blocked.
  *
  * Each check prints one line; screenshots land in probe-out/smoke/ and are
@@ -24,6 +26,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { projectChecks } from "./smoke-project.mjs";
 import { ROOT, openApp } from "./webdriver.mjs";
 
 const run = promisify(execFile);
@@ -1030,16 +1033,41 @@ try {
   await app.click(await app.find('[data-testid="light-studio"]'));
   await clearSources();
 
+  // 1.4 — save, reopen and still export.
+  await projectChecks({
+    app,
+    q,
+    ok,
+    expect,
+    sleep,
+    dialog,
+    waitUntil,
+    choose,
+    selectThumb,
+    selectLayer,
+    settled3d,
+    faces3d,
+    material,
+    registered,
+    overlayAt,
+    data,
+    FIXTURES,
+    ROOT,
+  });
+
   // Bypass the UI: call the IPC directly with things the user never selected.
   const refusals = await app.execAsync(`
     const done = arguments[arguments.length - 1];
     const invoke = window.__TAURI_INTERNALS__.invoke;
-    const attempt = (cmd, args) => invoke(cmd, args).then(() => "ALLOWED", (e) => typeof e === "string" ? e : JSON.stringify(e));
+    const attempt = (cmd, args, options) => invoke(cmd, args, options).then(() => "ALLOWED", (e) => typeof e === "string" ? e : JSON.stringify(e));
+    const project = JSON.stringify({ format: "maskora-project", schemaVersion: 1, sources: [{ id: "s", sha256: "a".repeat(64) }] });
     Promise.all([
       attempt("read_source", { handle: "C:\\\\Windows\\\\win.ini" }),
       attempt("read_source", { handle: "src-00000000000000000000000000000000" }),
       attempt("plugin:dialog|open", { options: {} }),
       attempt("plugin:opener|open_path", { path: "C:\\\\Windows\\\\win.ini" }),
+      attempt("save_project", { request: { json: project, sources: [{ id: "s", handle: "C:\\\\Windows\\\\win.ini" }], token: null, saveAs: false, suggestedName: "x" } }),
+      attempt("export_png", new Uint8Array([1, 2, 3, 4]), { headers: { "x-file-name": "x.png" } }),
     ]).then(done);`);
   expect(
     refusals.every((r) => r !== "ALLOWED"),
@@ -1053,6 +1081,10 @@ try {
   ok("guessed handle refused", refusals[1]);
   ok("dialog plugin refused to the frontend", refusals[2]);
   ok("opener plugin absent", refusals[3]);
+  expect(refusals[4].includes("unauthorizedSource"), refusals[4]);
+  ok("a save naming an unselected file as a source is refused before any dialog", refusals[4]);
+  expect(refusals[5].includes("invalidImage"), refusals[5]);
+  ok("an export whose bytes are not a PNG is refused before any dialog", refusals[5]);
 
   // Requests: everything same-origin, and an external fetch is blocked.
   const resources = await app.exec(

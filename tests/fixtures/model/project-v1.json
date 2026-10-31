@@ -1,0 +1,108 @@
+{
+  "format": "maskora-project",
+  "schemaVersion": 1,
+  "app": { "name": "Maskora", "version": "0.1.0" },
+  "savedAt": "2026-10-31T09:00:00.000Z",
+  "sources": [
+    {
+      "id": "art",
+      "name": "K2.pdf",
+      "size": 4210,
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "pageCount": 2,
+      "ref": { "relativePath": "pdf/K2.pdf", "fileName": "K2.pdf" }
+    },
+    {
+      "id": "masks",
+      "name": "masks.pdf",
+      "size": 3100,
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "pageCount": 3,
+      "ref": { "relativePath": null, "fileName": "masks.pdf" }
+    }
+  ],
+  "model": {
+    "roles": {
+      "art:0": "print",
+      "art:1": "print",
+      "masks:0": "mask",
+      "masks:1": "mask",
+      "masks:2": "ignore"
+    },
+    "surfaces": [
+      { "id": "s-front", "artwork": { "sourceId": "art", "page": 0 }, "box": "TrimBox" },
+      { "id": "s-back", "artwork": { "sourceId": "art", "page": 1 }, "box": "BleedBox" }
+    ],
+    "layers": [
+      {
+        "id": "l-uv",
+        "type": "uv",
+        "mask": { "kind": "pdfPage", "version": 1, "sourceId": "masks", "page": 0 },
+        "target": "s-front",
+        "enabled": true,
+        "interpretation": {
+          "mode": "luminance",
+          "polarity": "dark",
+          "invert": false,
+          "threshold": 0.5,
+          "featherMm": 0.2,
+          "offsetMm": [0.5, -0.25]
+        }
+      },
+      {
+        "id": "l-raised",
+        "type": "raisedUv",
+        "mask": { "kind": "pdfPage", "version": 1, "sourceId": "masks", "page": 1 },
+        "target": "s-front",
+        "enabled": true,
+        "interpretation": {
+          "mode": "alpha",
+          "polarity": "light",
+          "invert": true,
+          "threshold": 0.3,
+          "featherMm": 0,
+          "offsetMm": [0, 0]
+        }
+      },
+      {
+        "id": "l-future",
+        "type": "uv",
+        "mask": { "kind": "vectorPath", "version": 3, "path": "M0 0 L10 0 L10 10 Z" },
+        "target": "s-back",
+        "enabled": false,
+        "interpretation": {
+          "mode": "luminance",
+          "polarity": "dark",
+          "invert": false,
+          "threshold": 0.5,
+          "featherMm": 0,
+          "offsetMm": [0, 0]
+        }
+      }
+    ],
+    "recipes": {
+      "uv": { "gloss": 0.8, "strength": 0.9, "heightUm": 0, "bevelMm": 0, "crownUm": 0 },
+      "raisedUv": { "gloss": 0.95, "strength": 1, "heightUm": 120, "bevelMm": 0.4, "crownUm": 15 }
+    },
+    "scene": { "front": "s-front", "back": "s-back", "left": "s-front", "right": "s-back" },
+    "stock": { "preset": "silk", "roughness": 0.5, "thicknessMm": 0.3 }
+  },
+  "overrides": {
+    "art:1": {
+      "trim": { "rect": [9, 9, 586, 833], "derivation": "MediaBox inset 3 mm" }
+    }
+  },
+  "view": {
+    "mode": "3d",
+    "layout": "spread",
+    "printOnly": false,
+    "show": { "uv": true, "raisedUv": false },
+    "raisedMode": "normals",
+    "hiddenLayers": ["l-raised"],
+    "surfaceId": "s-front",
+    "selectedLayer": "l-uv"
+  },
+  "lighting": { "azimuth": 278, "elevation": 10, "intensity": 3.2, "environmentDeg": 45 },
+  "camera": { "position": [0.01, -0.2, 0.35], "target": [0, 0, 0] },
+  "selected": { "sourceId": "art", "page": 1 }
+}

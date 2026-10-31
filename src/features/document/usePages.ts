@@ -2,14 +2,18 @@
 
 import { useMemo } from "react";
 import { valueOf } from "@/project/capability";
-import { summarizePage, type PageSummary } from "@/project/facts";
+import { summarizePage, type PageOverride, type PageSummary } from "@/project/facts";
 import { pageKey, type PageRef } from "@/project/model";
 import { useProject } from "@/project/ProjectContext";
 import type { SourceView } from "@/project/store";
 
-/** Every page of every source, with both engines' facts and overrides combined, keyed by `pageKey`. */
-export function usePageSummaries(): Map<string, PageSummary> {
-  const [{ sources, overrides }] = useProject();
+/**
+ * Every page of every source, with both engines' facts and overrides combined, keyed by `pageKey`.
+ * An export passes the overrides it froze, so a later edit cannot reach it.
+ */
+export function usePageSummaries(frozenOverrides?: Record<string, PageOverride>): Map<string, PageSummary> {
+  const [{ sources, overrides: live }] = useProject();
+  const overrides = frozenOverrides ?? live;
   return useMemo(() => {
     const out = new Map<string, PageSummary>();
     for (const source of sources) {

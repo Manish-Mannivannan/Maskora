@@ -61,9 +61,11 @@ export interface ReliefStats {
   fallback?: string;
   /** The recipe the relief was built from, so a stale build can be recognised. */
   profile: { heightUm: number; bevelMm: number; crownUm: number };
+  /** Digest of the finish maps it was built from. */
+  digest: string;
 }
 
-interface FaceEntry {
+export interface FaceEntry {
   input: FaceInput;
   mesh: THREE.Mesh;
   coat: THREE.DataTexture;
@@ -102,7 +104,13 @@ function coatingGeometry(
 ): Coating {
   const { width, height } = result.maps;
   const m = bounded.mesh;
-  const base = { ms, step: bounded.step, estimated: bounded.estimated, profile: profileOf(recipe) };
+  const base = {
+    ms,
+    step: bounded.step,
+    estimated: bounded.estimated,
+    profile: profileOf(recipe),
+    digest: result.digest,
+  };
   if (!m)
     return {
       result,
@@ -151,7 +159,9 @@ function coatingGeometry(
   };
 }
 
-const faces = new Map<FaceName, FaceEntry>();
+/** The faces of one canvas, for its probe. The live viewport uses this one; an export brings its own. */
+export type FaceRegistry = Map<FaceName, FaceEntry>;
+const liveFaces: FaceRegistry = new Map();
 
 /** Delay before rebuilding the coating, so a dragged control rebuilds once, after it settles. */
 const COATING_DEBOUNCE_MS = 200;
@@ -160,11 +170,13 @@ export function Face({
   input,
   look,
   onRelief,
+  registry = liveFaces,
 }: {
   input: FaceInput;
   look: FinishLook;
   /** Told how raised UV is drawn on this face (mode, simplification, fallback). */
   onRelief?: (name: FaceName, stats: ReliefStats | null) => void;
+  registry?: FaceRegistry;
 }) {
   const mesh = useRef<THREE.Mesh>(null);
   const { result, geometry: geo, placement } = input;
@@ -258,9 +270,19 @@ export function Face({
       vertices: 0,
       shapes: [],
       profile: profileOf(raisedRecipe),
+      digest: result.digest,
       ...(fallback ? { fallback: current?.stats.fallback } : {}),
     };
-  }, [current, fallback, relief, timedRelief, result.maps.width, result.maps.height, raisedRecipe]);
+  }, [
+    current,
+    fallback,
+    relief,
+    timedRelief,
+    result.maps.width,
+    result.maps.height,
+    result.digest,
+    raisedRecipe,
+  ]);
 
   useEffect(() => {
     onRelief?.(input.name, stats);
@@ -269,11 +291,11 @@ export function Face({
   useEffect(() => {
     const node = mesh.current;
     if (!node) return;
-    faces.set(input.name, { input, mesh: node, coat, relief, material, stats });
+    registry.set(input.name, { input, mesh: node, coat, relief, material, stats });
     return () => {
-      if (faces.get(input.name)?.mesh === node) faces.delete(input.name);
+      if (registry.get(input.name)?.mesh === node) registry.delete(input.name);
     };
-  }, [input, coat, relief, material, stats]);
+  }, [registry, input, coat, relief, material, stats]);
 
   return (
     <group position={placement.position} rotation-y={placement.turn}>
@@ -320,7 +342,7 @@ export function StockEdge({
 
 declare global {
   interface Window {
-    __maskora?: { cspViolations: string[]; scene?: SceneProbeApi };
+    __maskora?: { cspViolations: string[]; scene?: SceneProbeApi; lastExport?: ExportProbe };
   }
 }
 
@@ -357,6 +379,16 @@ export interface SceneProbeApi {
   };
 }
 
+/** What the smoke can ask about the last still export, fixed at the moment it was rendered. */
+export interface ExportProbe {
+  width: number;
+  height: number;
+  faces: { name: FaceName; digest: string; stats: ReliefStats | null; coating: boolean }[];
+  /** Pixel position in the exported image of a trim-relative point on a face. */
+  project(name: FaceName, pointMm: [number, number]): [number, number] | null;
+  metadata: Record<string, string>;
+}
+
 /** Raster (u, v) of a point given in mm from the face box's lower-left corner. */
 function uvOf(input: FaceInput, [mx, my]: [number, number]): [number, number] {
   const k = mmPerUnit(input.userUnit);
@@ -364,7 +396,7 @@ function uvOf(input: FaceInput, [mx, my]: [number, number]): [number, number] {
   return [x / input.result.plan.width, y / input.result.plan.height];
 }
 
-function worldPoint(entry: FaceEntry, pointMm: [number, number]) {
+export function worldPoint(entry: FaceEntry, pointMm: [number, number]) {
   const [u, v] = uvOf(entry.input, pointMm);
   const [lx, ly] = localFromUv(entry.input.geometry, u, v);
   return { uv: [u, v] as [number, number], world: entry.mesh.localToWorld(new THREE.Vector3(lx, ly, 0)) };
@@ -377,7 +409,7 @@ export function SceneProbe() {
     const raycaster = new THREE.Raycaster();
     window.__maskora.scene = {
       faces: () =>
-        [...faces.values()].map((e) => ({
+        [...liveFaces.values()].map((e) => ({
           name: e.input.name,
           digest: coatDigest(e.coat),
           sizeMm: [e.input.geometry.size[0] * 1000, e.input.geometry.size[1] * 1000],
@@ -386,7 +418,7 @@ export function SceneProbe() {
           stats: e.stats,
         })),
       sample: (name, points) => {
-        const entry = faces.get(name);
+        const entry = liveFaces.get(name);
         if (!entry) return [];
         const normal = new THREE.Vector3(0, 0, 1).transformDirection(entry.mesh.matrixWorld);
         const coat = entry.coat.image as { data: Uint8Array; width: number; height: number };
@@ -416,7 +448,7 @@ export function SceneProbe() {
         });
       },
       project: (name, pointMm) => {
-        const entry = faces.get(name);
+        const entry = liveFaces.get(name);
         if (!entry) return null;
         const p = worldPoint(entry, pointMm).world.project(camera);
         return [((p.x + 1) / 2) * size.width, ((1 - p.y) / 2) * size.height];

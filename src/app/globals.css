@@ -608,3 +608,51 @@ body {
 .finish-look {
   margin-bottom: 10px;
 }
+
+/* Project file and export results (step 1.4). */
+.status[data-kind="failed"] {
+  color: #ef8a80;
+}
+
+.status[data-kind="saved"],
+.status[data-kind="opened"] {
+  color: var(--text);
+}
+
+.project-name {
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;
+}
+
+.project-name .dirty {
+  color: var(--accent);
+}
+
+.warning {
+  margin: 8px 0 0;
+  color: var(--accent);
+}
+
+.relink {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.relink li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0;
+  padding: 6px 8px;
+  border-left: 3px solid var(--accent);
+  background: #262a2f;
+}
+
+.relink li[data-status="ok"] {
+  border-color: var(--muted);
+}
+
+.relink li .hint {
+  margin: 0;
+}

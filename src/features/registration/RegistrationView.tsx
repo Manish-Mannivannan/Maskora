@@ -47,6 +47,8 @@ export default function RegistrationView() {
   const result = finish.status === "ready" || finish.status === "rendering" ? finish.result : null;
   const state = finish.status === "none" ? "idle" : finish.status;
   const error = finish.status === "failed" ? finish.message : "";
+  // A stale result is never shown for a surface whose sources are not back as saved.
+  const blocked = finish.status === "blocked" ? finish.message : "";
 
   useEffect(() => {
     if (!stage) return;
@@ -86,6 +88,7 @@ export default function RegistrationView() {
     return l && l.mask.kind === "pdfPage" ? pageName(sources, summaries, l.mask) : "?";
   };
   const warnings: Warning[] = [];
+  if (blocked) warnings.push({ code: "sourceBlocked", message: blocked });
   for (const l of targeting) {
     const problem = layerProblem(model, l, list);
     if (problem) warnings.push({ code: problem.code, layer: nameOf(l.id), message: problem.message });

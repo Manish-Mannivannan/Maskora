@@ -94,7 +94,9 @@ function LayerEditor({ layer }: { layer: FinishLayer }) {
   const i = layer.interpretation;
   const set = (patch: Partial<typeof i>) => store.setInterpretation(layer.id, patch);
   const target = model.surfaces.find((s) => s.id === layer.target);
-  const artFrame = target && frameOf(summaries.get(pageKey(target.artwork))!, target.box);
+  // The target's file may not be back yet in a reopened project.
+  const artSummary = target && summaries.get(pageKey(target.artwork));
+  const artFrame = target && artSummary ? frameOf(artSummary, target.box) : null;
   const maskSummary = layer.mask.kind === "pdfPage" ? summaries.get(pageKey(layer.mask)) : undefined;
   const maskFrame = target && maskSummary ? frameOf(maskSummary, target.box) : null;
   const warnings = artFrame && maskFrame ? registrationWarnings(artFrame, maskFrame, target!.box) : [];

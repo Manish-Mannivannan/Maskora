@@ -12,99 +12,66 @@
  * The scene shows a leaf (front and optional back) or a spread (left and
  * right), each page at its physical size, with materials built from the same
  * shared finish jobs the registration view uses. Without a document it shows
- * a blank A4 placeholder.
+ * a blank A4 placeholder. The still export draws the same `SceneContent`.
  *
- * The current camera position and light angles are mirrored onto the
+ * Lighting and the camera pose belong to the project, so they are saved with
+ * it; an opened project's camera is applied once its pages are shown again.
+ * The current camera position and light angles are also mirrored onto the
  * container's data attributes so a native smoke run can observe what a drag
  * actually changed.
  */
-import { Environment, Lightformer, OrbitControls } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from "react";
 import * as THREE from "three";
 import { usePageSummaries, pageName } from "@/features/document/usePages";
-import { frameOf } from "@/finish/pipeline";
-import { useFinish, type FinishState } from "@/finish/useFinish";
-import { FINISH_NAMES, pageKey, surfaceFor, type PrintSurface } from "@/project/model";
+import { useFinish } from "@/finish/useFinish";
+import { FINISH_NAMES, type PrintSurface } from "@/project/model";
 import { useProject } from "@/project/ProjectContext";
+import type { CameraPose } from "@/project/projectFile";
 import type { FinishLook } from "./finishMaterial";
-import { faceGeometry, fitDistance, leafPlacements, sizesDiffer, spreadPlacements } from "./layout";
+import { sizesDiffer } from "./layout";
 import { dragLight, lightDirection, type LightAngles } from "./lighting";
-import { Face, SceneProbe, StockEdge, type FaceInput, type FaceName, type ReliefStats } from "./PageScene";
+import { SceneProbe, type FaceName, type ReliefStats } from "./PageScene";
+import {
+  FOV,
+  SceneContent,
+  VIEWPORT_BACKGROUND,
+  buildFaces,
+  presetPose,
+  sceneBounds,
+  useSlots,
+} from "./scene";
 
 export type InteractionMode = "camera" | "light";
 export type CameraPreset = "reset" | "fit" | "front" | "back" | "low";
 
 export interface ViewportProps {
   mode: InteractionMode;
-  light: LightAngles;
-  intensity: number;
-  onLightChange: (next: LightAngles) => void;
   /** Incremented to apply `kind`. */
   camera: { kind: CameraPreset; n: number };
-  /** Environment rotation about the vertical, degrees. */
-  environmentDeg: number;
 }
 
-// A blank A4 page in metres, shown until a document is open.
-const PAGE: [number, number] = [0.21, 0.297];
-const LIGHT_DISTANCE = 1.2;
 // The gizmo sits close to the page along the light direction so it stays in the default view.
 const GIZMO_DISTANCE = 0.15;
 const CAMERA_START: [number, number, number] = [0, 0.05, 0.62];
-const FOV = 40;
 
 const round = (v: number) => Math.round(v * 1000) / 1000;
 
-/** The surfaces the 3D view shows, resolved from explicit choices and the panel selection. */
-function useSlots(): {
-  layout: "page" | "spread";
-  a: PrintSurface | null;
-  b: PrintSurface | null;
-  names: [FaceName, FaceName];
-} {
-  const [{ model, view, selected }] = useProject();
-  const find = (id: string | null) => model.surfaces.find((s) => s.id === id) ?? null;
-  const selectedKey = selected ? pageKey(selected) : null;
-  // A selected page that is not a print surface is still shown, as plain artwork at its trim size.
-  const followed = useMemo<PrintSurface | null>(() => {
-    if (!selected) return null;
-    return surfaceFor(model, selected) ?? { id: `page:${selectedKey}`, artwork: selected, box: "TrimBox" };
-    // Stable identity per selected page, so its finish job is not re-keyed on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedKey, model.surfaces]);
-  if (view.layout === "spread")
-    return {
-      layout: "spread",
-      a: find(model.scene.left),
-      b: find(model.scene.right),
-      names: ["left", "right"],
-    };
-  return {
-    layout: "page",
-    a: find(model.scene.front) ?? followed,
-    b: find(model.scene.back),
-    names: ["front", "back"],
-  };
-}
-
-export default function Viewport({
-  mode,
-  light,
-  intensity,
-  onLightChange,
-  camera,
-  environmentDeg,
-}: ViewportProps) {
-  const [{ model, view, sources }] = useProject();
+export default function Viewport({ mode, camera }: ViewportProps) {
+  const [{ model, view, sources, selected, lighting, camera: savedCamera, cameraRestore, relink }, store] =
+    useProject();
   const summaries = usePageSummaries();
   const container = useRef<HTMLDivElement>(null);
   const controls = useRef<ComponentRef<typeof OrbitControls>>(null);
   const sun = useRef<THREE.DirectionalLight>(null);
   const drag = useRef<{ x: number; y: number; start: LightAngles } | null>(null);
   const [aspect, setAspect] = useState(1.5);
+  /** The last opened project whose camera has been applied for good. */
+  const restored = useRef(0);
+  const restoring = Object.values(relink).some((r) => r.status === "loading");
 
-  const slots = useSlots();
+  const slots = useSlots(model, view, selected);
   // How each face draws raised UV, as the faces report it, for the status line.
   const [relief, setRelief] = useState<Partial<Record<FaceName, ReliefStats>>>({});
   const reportRelief = useCallback(
@@ -129,52 +96,37 @@ export default function Viewport({
     [model.recipes, model.stock, view.show, view.printOnly, view.raisedMode],
   );
 
-  const faces = useMemo(() => {
-    const build = (surface: PrintSurface | null, finish: FinishState, name: FaceName) => {
-      const result = finish.status === "ready" || finish.status === "rendering" ? finish.result : null;
-      const summary = surface && summaries.get(pageKey(surface.artwork));
-      const frame = summary && surface && frameOf(summary, surface.box);
-      if (!result || !frame || !summary) return null;
-      return {
-        name,
-        result,
-        anchor: frame.anchor,
-        userUnit: summary.userUnit,
-        geometry: faceGeometry(result.plan, frame.anchor, result.pxPerMm),
-      };
-    };
-    const a = build(slots.a, finishA, slots.names[0]);
-    const b = build(slots.b, finishB, slots.names[1]);
-    const out: FaceInput[] = [];
-    if (slots.layout === "page") {
-      const p = leafPlacements(thicknessM);
-      if (a) out.push({ ...a, placement: p.front });
-      if (b) out.push({ ...b, placement: p.back });
-    } else if (a && b) {
-      const p = spreadPlacements(a.geometry.size, b.geometry.size, thicknessM);
-      out.push({ ...a, placement: p.left }, { ...b, placement: p.right });
-    }
-    return out;
-  }, [slots.a, slots.b, slots.layout, slots.names, finishA, finishB, summaries, thicknessM]);
-
-  // The area to fit: the leaf, or both pages of the spread.
-  const bounds: [number, number] = faces.length
-    ? slots.layout === "spread"
-      ? [
-          faces[0].geometry.size[0] + (faces[1]?.geometry.size[0] ?? 0),
-          Math.max(...faces.map((f) => f.geometry.size[1])),
-        ]
-      : [Math.max(...faces.map((f) => f.geometry.size[0])), Math.max(...faces.map((f) => f.geometry.size[1]))]
-    : PAGE;
+  const faces = useMemo(
+    () => buildFaces(slots, [finishA, finishB], summaries, thicknessM),
+    [slots, finishA, finishB, summaries, thicknessM],
+  );
+  const bounds = sceneBounds(faces, slots.layout);
   const fitKey = `${slots.layout}|${slots.a?.id}|${slots.b?.id}|${bounds.map((v) => v.toFixed(4)).join("x")}`;
-
-  const direction = useMemo(() => lightDirection(light), [light]);
-  const lightPos = direction.map((v) => v * LIGHT_DISTANCE) as [number, number, number];
+  const direction = useMemo(() => lightDirection(lighting), [lighting]);
 
   const recordCamera = () => {
     const cam = controls.current?.object;
     if (cam && container.current)
       container.current.dataset.camera = JSON.stringify(cam.position.toArray().map(round));
+  };
+  /** Keep the pose in the project once a move or preset has finished. */
+  const saveCamera = () => {
+    const c = controls.current;
+    if (!c) return;
+    store.setCamera({
+      position: c.object.position.toArray() as CameraPose["position"],
+      target: c.target.toArray() as CameraPose["target"],
+    });
+  };
+
+  const apply = (pose: CameraPose) => {
+    const c = controls.current;
+    if (!c) return;
+    c.target.set(...pose.target);
+    c.object.position.set(...pose.position);
+    c.update();
+    recordCamera();
+    saveCamera();
   };
 
   const place = (kind: CameraPreset) => {
@@ -183,23 +135,16 @@ export default function Viewport({
     if (kind === "reset" && !faces.length) {
       c.reset();
       recordCamera();
+      saveCamera();
       return;
     }
     // Margin leaves room for the status line along the bottom.
-    const d = fitDistance(bounds[0], bounds[1], FOV, aspect, 1.3);
-    c.target.set(0, 0, 0);
-    if (kind === "low") {
-      // Low along the page from below, to judge relief silhouettes and shadows.
-      const a = (6 * Math.PI) / 180;
-      c.object.position.set(0, -Math.cos(a) * d * 0.8, Math.sin(a) * d * 0.8);
-    } else c.object.position.set(0, 0, kind === "back" ? -d : d);
-    c.update();
-    recordCamera();
+    apply(presetPose(kind === "reset" ? "front" : kind, bounds, aspect, 1.3));
   };
 
   useEffect(() => {
-    if (container.current) container.current.dataset.light = JSON.stringify(light);
-  }, [light]);
+    if (container.current) container.current.dataset.light = JSON.stringify(lighting);
+  }, [lighting]);
 
   useEffect(() => {
     // The fitted shadow bounds take effect only once the shadow camera's projection is rebuilt.
@@ -207,16 +152,26 @@ export default function Viewport({
   }, []);
 
   useEffect(() => {
-    if (camera.n > 0) place(camera.kind);
+    if (camera.n > 0) {
+      restored.current = cameraRestore;
+      place(camera.kind);
+    }
     // Applied when a preset is requested, with the bounds of that moment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [camera.n]);
 
   useEffect(() => {
+    if (!faces.length) return;
+    // An opened project's camera is applied, not a fresh fit, until its sources have finished loading.
+    if (cameraRestore > restored.current && savedCamera) {
+      apply(savedCamera);
+      if (!restoring) restored.current = cameraRestore;
+      return;
+    }
     // New content (another page, layout or size) is framed from the front.
-    if (faces.length) place("front");
+    place("front");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fitKey]);
+  }, [fitKey, cameraRestore, restoring]);
 
   useEffect(() => {
     const el = container.current;
@@ -243,8 +198,10 @@ export default function Viewport({
         )
         .join(" and ")}); each is shown at its own size.`,
     });
-  for (const f of [finishA, finishB])
+  for (const f of [finishA, finishB]) {
     if (f.status === "failed") notes.push({ code: "renderFailed", text: f.message });
+    if (f.status === "blocked") notes.push({ code: "sourceBlocked", text: f.message });
+  }
   const busy = [finishA, finishB].some((f) => f.status === "rendering");
   const hasRaised = faces.some((f) => f.result.maps.raisedUv.some((v) => v > 0));
   const shownRelief = faces.map((f) => relief[f.name]).filter((s): s is ReliefStats => !!s);
@@ -274,16 +231,18 @@ export default function Viewport({
       data-mode={mode}
       data-faces={faces.map((f) => f.name).join(",")}
       data-busy={busy}
-      data-environment={environmentDeg}
+      data-environment={lighting.environmentDeg}
       style={{ cursor: mode === "light" ? "crosshair" : "grab" }}
       onPointerDown={(e) => {
         if (mode !== "light" || e.button !== 0) return;
         (e.target as Element).setPointerCapture?.(e.pointerId);
-        drag.current = { x: e.clientX, y: e.clientY, start: light };
+        drag.current = { x: e.clientX, y: e.clientY, start: lighting };
       }}
       onPointerMove={(e) => {
         if (!drag.current) return;
-        onLightChange(dragLight(drag.current.start, e.clientX - drag.current.x, e.clientY - drag.current.y));
+        store.setLighting(
+          dragLight(drag.current.start, e.clientX - drag.current.x, e.clientY - drag.current.y),
+        );
       }}
       onPointerUp={() => (drag.current = null)}
       onPointerCancel={() => (drag.current = null)}
@@ -299,92 +258,25 @@ export default function Viewport({
           recordCamera();
         }}
       >
-        <color attach="background" args={["#1d1f22"]} />
-        <ambientLight intensity={0.05} />
-        <directionalLight
-          ref={sun}
-          position={lightPos}
-          intensity={intensity}
-          castShadow
-          // Shadows fitted to the page area, so a texel is about 0.1 mm and a coating's shadow can show.
-          shadow-mapSize={[4096, 4096]}
-          shadow-camera-left={-0.25}
-          shadow-camera-right={0.25}
-          shadow-camera-top={0.25}
-          shadow-camera-bottom={-0.25}
-          shadow-camera-near={0.5}
-          shadow-camera-far={2}
-          shadow-bias={-0.00002}
-          shadow-normalBias={0.00005}
-        />
-        {/* The light gizmo: where the light sits, shown in both modes. */}
-        <mesh position={direction.map((v) => v * GIZMO_DISTANCE) as [number, number, number]}>
-          <sphereGeometry args={[0.012, 16, 16]} />
-          <meshBasicMaterial color={mode === "light" ? "#ffd166" : "#8a8f98"} />
-        </mesh>
-        {faces.length ? (
-          <>
-            {faces.map((f) => (
-              <Face key={f.name} input={f} look={look} onRelief={reportRelief} />
-            ))}
-            {slots.layout === "page" ? (
-              <StockEdge
-                size={faces[0].geometry.size}
-                position={[0, 0, 0]}
-                thicknessM={thicknessM}
-                roughness={model.stock.roughness}
-              />
-            ) : (
-              faces.map((f) => (
-                <StockEdge
-                  key={`edge-${f.name}`}
-                  size={f.geometry.size}
-                  position={f.placement.position}
-                  thicknessM={thicknessM}
-                  roughness={model.stock.roughness}
-                />
-              ))
-            )}
-          </>
-        ) : (
-          <mesh castShadow receiveShadow position={[0, 0, 0.002]}>
-            <planeGeometry args={PAGE} />
-            <meshPhysicalMaterial color="#f4f1ea" roughness={0.55} clearcoat={0} />
-          </mesh>
-        )}
-        <mesh receiveShadow position={[0, 0, -0.02]}>
-          <planeGeometry args={[3, 3]} />
-          <shadowMaterial transparent opacity={0.25} />
-        </mesh>
-        <Environment
-          resolution={256}
-          frames={1}
-          environmentRotation={[0, (environmentDeg * Math.PI) / 180, 0]}
+        <SceneContent
+          faces={faces}
+          look={look}
+          layout={slots.layout}
+          lighting={lighting}
+          thicknessM={thicknessM}
+          roughness={model.stock.roughness}
+          background={VIEWPORT_BACKGROUND}
+          onRelief={reportRelief}
+          sunRef={sun}
+          // A blank page stands in only while there is no document; a page that cannot be drawn shows nothing.
+          placeholder={!sources.length && !Object.keys(relink).length}
         >
-          <Lightformer form="rect" intensity={1.5} position={[0, 2, 2]} scale={[3, 1, 1]} />
-          <Lightformer
-            form="rect"
-            intensity={0.6}
-            position={[-2.5, 0.5, 1]}
-            rotation-y={Math.PI / 2}
-            scale={[2, 1, 1]}
-          />
-          <Lightformer
-            form="rect"
-            intensity={0.4}
-            position={[2.5, 0.5, 1]}
-            rotation-y={-Math.PI / 2}
-            scale={[2, 1, 1]}
-          />
-          {/* Soft fill from behind, so the back of a leaf can be inspected from behind. */}
-          <Lightformer
-            form="rect"
-            intensity={0.8}
-            position={[0, 1, -2]}
-            rotation-y={Math.PI}
-            scale={[3, 1, 1]}
-          />
-        </Environment>
+          {/* The light gizmo: where the light sits, shown in both modes, never exported. */}
+          <mesh position={direction.map((v) => v * GIZMO_DISTANCE) as [number, number, number]}>
+            <sphereGeometry args={[0.012, 16, 16]} />
+            <meshBasicMaterial color={mode === "light" ? "#ffd166" : "#8a8f98"} />
+          </mesh>
+        </SceneContent>
         <OrbitControls
           ref={controls}
           enabled={mode === "camera"}
@@ -393,6 +285,8 @@ export default function Viewport({
           minDistance={0.05}
           maxDistance={3}
           onChange={recordCamera}
+          onStart={() => (restored.current = cameraRestore)}
+          onEnd={saveCamera}
         />
         <SceneProbe />
       </Canvas>

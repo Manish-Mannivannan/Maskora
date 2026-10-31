@@ -13,6 +13,8 @@ import { FinishesSection } from "@/features/finishes/FinishesSection";
 import RegistrationView from "@/features/registration/RegistrationView";
 import { PageInspector } from "@/features/document/PageInspector";
 import { PagesSection } from "@/features/document/PagesSection";
+import { ExportSection } from "@/features/export/ExportSection";
+import { ProjectSection } from "@/features/project/ProjectSection";
 import { ProjectProvider, useProject } from "@/project/ProjectContext";
 import { normalizeAngles, type LightAngles } from "@/rendering/lighting";
 import type { CameraPreset, InteractionMode } from "@/rendering/Viewport";
@@ -54,12 +56,15 @@ function MainView({ children }: { children: React.ReactNode }) {
 }
 
 function Shell() {
+  const [{ lighting }, store] = useProject();
   const [panelWidth, setPanelWidth] = useState(PANEL_DEFAULT);
   const [mode, setMode] = useState<InteractionMode>("camera");
-  const [light, setLight] = useState<LightAngles>({ azimuth: 35, elevation: 40 });
-  const [intensity, setIntensity] = useState(2.5);
   const [camera, setCamera] = useState<{ kind: CameraPreset; n: number }>({ kind: "reset", n: 0 });
-  const [environmentDeg, setEnvironmentDeg] = useState(0);
+  const light = lighting;
+  const intensity = lighting.intensity;
+  const environmentDeg = lighting.environmentDeg;
+  const setIntensity = (value: number) => store.setLighting({ intensity: Math.min(6, Math.max(0, value)) });
+  const setEnvironmentDeg = (value: number) => store.setLighting({ environmentDeg: value });
   const applyLightPreset = (preset: "studio" | "grazing") => {
     // Studio: soft and high. Grazing: from the left, 8° off the upright page's surface (azimuth 278°, 10° up),
     // so the page is lit at a shallow angle and relief edges and shadows show. Azimuth 270° would run
@@ -68,8 +73,7 @@ function Shell() {
       preset === "studio"
         ? { azimuth: 35, elevation: 40, intensity: 2.5 }
         : { azimuth: 278, elevation: 10, intensity: 3.2 };
-    setLight({ azimuth: p.azimuth, elevation: p.elevation });
-    setIntensity(p.intensity);
+    store.setLighting(p);
   };
   const resizing = useRef<{ x: number; width: number } | null>(null);
 
@@ -88,12 +92,17 @@ function Shell() {
     if (process.env.NEXT_PUBLIC_MASKORA_PROBE === "1") void import("@/pdf/probe").then((m) => m.install());
   }, []);
 
-  const setAngles = (next: Partial<LightAngles>) => setLight((prev) => normalizeAngles({ ...prev, ...next }));
+  const setAngles = (next: Partial<LightAngles>) =>
+    store.setLighting(normalizeAngles({ azimuth: light.azimuth, elevation: light.elevation, ...next }));
 
   return (
     <div className="workspace" style={{ gridTemplateColumns: `${panelWidth}px 6px 1fr` }}>
       <aside className="panel" data-testid="panel" aria-label="Controls">
         <h1 className="app-name">Maskora</h1>
+
+        <Section id="project" title="Project">
+          <ProjectSection />
+        </Section>
 
         <Section id="sources" title="Sources">
           <SourcesSection />
@@ -209,6 +218,10 @@ function Shell() {
         <Section id="view" title="View">
           <ViewControls onCamera={(kind) => setCamera((c) => ({ kind, n: c.n + 1 }))} />
         </Section>
+
+        <Section id="export" title="Export">
+          <ExportSection />
+        </Section>
       </aside>
 
       <div
@@ -237,14 +250,7 @@ function Shell() {
       />
 
       <MainView>
-        <Viewport
-          mode={mode}
-          light={light}
-          intensity={intensity}
-          onLightChange={setLight}
-          camera={camera}
-          environmentDeg={environmentDeg}
-        />
+        <Viewport mode={mode} camera={camera} />
       </MainView>
     </div>
   );

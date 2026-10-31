@@ -3,5 +3,13 @@
   "identifier": "default",
   "description": "The main window may select a source through the native dialog and read and inspect sources it was handed; nothing else.",
   "windows": ["main"],
-  "permissions": ["allow-select-source", "allow-read-source", "allow-inspect-geometry"]
+  "permissions": [
+    "allow-select-source",
+    "allow-read-source",
+    "allow-inspect-geometry",
+    "allow-save-project",
+    "allow-open-project",
+    "allow-locate-source",
+    "allow-export-png"
+  ]
 }

@@ -9,8 +9,10 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePageSummaries } from "@/features/document/usePages";
-import { layerProblem, pageKey, type PrintSurface } from "@/project/model";
+import type { PageOverride } from "@/project/facts";
+import { layerProblem, pageKey, type PrintSurface, type ProjectModel } from "@/project/model";
 import { useProject } from "@/project/ProjectContext";
+import { blockedSources } from "@/project/store";
 import { FINISH_RESOLUTION, finishJob, latestOnly } from "./jobs";
 import { frameOf, runRegistration, type LayerInput, type RegistrationResult } from "./pipeline";
 
@@ -18,22 +20,45 @@ export type FinishState =
   | { status: "none" }
   | { status: "rendering"; result: RegistrationResult | null }
   | { status: "ready"; result: RegistrationResult }
-  | { status: "failed"; message: string };
+  | { status: "failed"; message: string }
+  /** A source it needs is missing, unapproved or held after changing: nothing is drawn from stale assignments. */
+  | { status: "blocked"; message: string };
+
+/** The model and overrides an export froze; the live project's are used otherwise. */
+export interface FrozenInputs {
+  model: ProjectModel;
+  overrides: Record<string, PageOverride>;
+}
 
 /**
  * Finish maps for `surface`, which may also be a page that is not (yet) a
  * print surface: it then simply has no finish layers.
  */
-export function useFinish(surface: PrintSurface | null | undefined): FinishState {
-  const [{ model, sources }, store] = useProject();
-  const summaries = usePageSummaries();
+export function useFinish(surface: PrintSurface | null | undefined, frozen?: FrozenInputs): FinishState {
+  const [state, store] = useProject();
+  const { sources, relink } = state;
+  const model = frozen?.model ?? state.model;
+  const summaries = usePageSummaries(frozen?.overrides);
+  const blocked = useMemo(() => blockedSources({ relink, sources }), [relink, sources]);
   // The settled outcome of the latest job, and the last good result to show while a new one runs.
   const [settled, setSettled] = useState<{ key: string; state: FinishState } | null>(null);
   const [last, setLast] = useState<RegistrationResult | null>(null);
   const latest = useRef(latestOnly<RegistrationResult>());
 
-  const job = useMemo(() => {
+  const block = useMemo(() => {
     if (!surface) return null;
+    const needed = [
+      surface.artwork.sourceId,
+      ...model.layers
+        .filter((l) => l.target === surface.id && l.enabled && l.mask.kind === "pdfPage")
+        .map((l) => (l.mask as { sourceId: string }).sourceId),
+    ];
+    for (const id of needed) if (blocked.has(id)) return blocked.get(id)!;
+    return null;
+  }, [blocked, model, surface]);
+
+  const job = useMemo(() => {
+    if (!surface || block) return null;
     const artSource = sources.find((s) => s.id === surface.artwork.sourceId);
     const artSummary = summaries.get(pageKey(surface.artwork));
     if (!artSource || !artSummary || !frameOf(artSummary, surface.box)) return null;
@@ -68,7 +93,7 @@ export function useFinish(surface: PrintSurface | null | undefined): FinishState
       resolution: FINISH_RESOLUTION,
     });
     return { key, surface, artSource, artSummary, layers };
-  }, [model, sources, summaries, surface]);
+  }, [model, sources, summaries, surface, block]);
 
   useEffect(() => {
     if (!job) return;
@@ -103,6 +128,7 @@ export function useFinish(surface: PrintSurface | null | undefined): FinishState
     return () => clearTimeout(timer);
   }, [job, store]);
 
+  if (block) return { status: "blocked", message: block };
   if (!job) return { status: "none" };
   if (settled?.key === job.key) return settled.state;
   return { status: "rendering", result: last };

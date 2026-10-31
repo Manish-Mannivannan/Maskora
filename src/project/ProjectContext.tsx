@@ -6,6 +6,7 @@
  * projects side by side (architecture §2.4).
  */
 import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { locateSource, openProject, saveProject } from "@/native/project";
 import { inspectGeometry, readSource, selectSource } from "@/native/sources";
 import { openSession } from "@/pdf/adapter";
 import { ProjectStore, type ProjectDeps } from "./store";
@@ -15,6 +16,8 @@ const nativeDeps: ProjectDeps = {
   readSource,
   inspectGeometry,
   openPdf: openSession,
+  files: { save: saveProject, open: openProject, locate: locateSource },
+  appVersion: process.env.NEXT_PUBLIC_APP_VERSION,
   async digest(bytes) {
     const hash = await crypto.subtle.digest("SHA-256", bytes as Uint8Array<ArrayBuffer>);
     return Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, "0")).join("");
