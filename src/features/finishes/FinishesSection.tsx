@@ -134,6 +134,7 @@ function LayerEditor({ layer }: { layer: FinishLayer }) {
       <label className="check">
         <input
           type="checkbox"
+          data-testid="layer-enabled"
           checked={layer.enabled}
           onChange={(e) => store.setLayerEnabled(layer.id, e.target.checked)}
         />
@@ -273,6 +274,60 @@ function LayerEditor({ layer }: { layer: FinishLayer }) {
   );
 }
 
+/** How each finish type looks in 3D: one recipe per type, with declared units and limits. */
+function FinishLookControls() {
+  const [{ model, view }, store] = useProject();
+  const field = (
+    type: FinishType,
+    key: keyof (typeof model.recipes)["uv"],
+    label: string,
+    step: number,
+    min: number,
+    max: number,
+  ) => (
+    <label key={`${type}-${key}`}>
+      {label}
+      <NumberField
+        testid={`recipe-${type}-${key}`}
+        value={model.recipes[type][key]}
+        step={step}
+        min={min}
+        max={max}
+        onCommit={(v) => store.setRecipe(type, { [key]: v })}
+      />
+    </label>
+  );
+  return (
+    <details className="details finish-look" data-testid="finish-look">
+      <summary>Finish look</summary>
+      <p className="hint">{FINISH_NAMES.uv}</p>
+      <div className="offsets">
+        {field("uv", "gloss", "Gloss (0–1)", 0.05, 0, 1)}
+        {field("uv", "strength", "Strength (0–1)", 0.05, 0, 1)}
+      </div>
+      <p className="hint">{FINISH_NAMES.raisedUv}</p>
+      <div className="offsets">
+        {field("raisedUv", "gloss", "Gloss (0–1)", 0.05, 0, 1)}
+        {field("raisedUv", "strength", "Strength (0–1)", 0.05, 0, 1)}
+        {field("raisedUv", "heightUm", "Height (µm)", 5, 10, 300)}
+        {field("raisedUv", "bevelMm", "Bevel (mm)", 0.05, 0.05, 2)}
+        {field("raisedUv", "crownUm", "Crown (µm)", 5, 0, 100)}
+      </div>
+      <label>
+        Draw raised UV as
+        <select
+          data-testid="raised-mode"
+          value={view.raisedMode}
+          onChange={(e) => store.setView({ raisedMode: e.target.value as "normals" | "mesh" })}
+        >
+          <option value="mesh">Coating geometry</option>
+          <option value="normals">Surface normals (lighter, no shadows)</option>
+        </select>
+      </label>
+    </details>
+  );
+}
+
 export function FinishesSection() {
   const [{ model, sources, view, lastRefusal }, store] = useProject();
   const summaries = usePageSummaries();
@@ -293,6 +348,7 @@ export function FinishesSection() {
           Not done: {lastRefusal.message}
         </p>
       ) : null}
+      <FinishLookControls />
       <ol className="layers">
         {model.layers.map((layer) => {
           const problem = layerProblem(model, layer, list);

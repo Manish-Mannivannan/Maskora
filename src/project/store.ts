@@ -87,6 +87,14 @@ export interface ViewState {
   selectedLayer: string | null;
   /** Layers left out of the registration overlay (they still count for the finish). */
   hiddenLayers: string[];
+  /** 3D view: one leaf (front and back) or a two-page spread. */
+  layout: "page" | "spread";
+  /** 3D view: compare against the print alone. */
+  printOnly: boolean;
+  /** 3D view: which finish types are drawn. */
+  show: Record<M.FinishType, boolean>;
+  /** 3D view: raised UV as coating geometry (the default), or as a normal map (the lighter fallback). */
+  raisedMode: "normals" | "mesh";
 }
 
 const INITIAL: ProjectState = {
@@ -96,7 +104,16 @@ const INITIAL: ProjectState = {
   overrides: {},
   model: M.EMPTY_MODEL,
   lastRefusal: null,
-  view: { mode: "3d", surfaceId: null, selectedLayer: null, hiddenLayers: [] },
+  view: {
+    mode: "3d",
+    surfaceId: null,
+    selectedLayer: null,
+    hiddenLayers: [],
+    layout: "page",
+    printOnly: false,
+    show: { uv: true, raisedUv: true },
+    raisedMode: "mesh",
+  },
 };
 
 export class ProjectStore {
@@ -396,6 +413,15 @@ export class ProjectStore {
   }
   moveLayer(layerId: string, step: -1 | 1) {
     this.#set({ model: M.moveLayer(this.#state.model, layerId, step) });
+  }
+  setSceneSlot(slot: keyof M.SceneAssignment, surfaceId: string | null) {
+    return this.#apply(M.setSceneSlot(this.#state.model, slot, surfaceId));
+  }
+  setRecipe(type: M.FinishType, patch: Partial<M.FinishRecipe>) {
+    return this.#apply(M.setRecipe(this.#state.model, type, patch));
+  }
+  setStock(patch: Partial<M.Stock>) {
+    return this.#apply(M.setStock(this.#state.model, patch));
   }
   setSurfaceBox(surfaceId: string, box: M.SurfaceBox) {
     this.#set({ model: M.setSurfaceBox(this.#state.model, surfaceId, box) });

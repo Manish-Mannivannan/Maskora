@@ -72,14 +72,133 @@ export interface FinishLayer {
   interpretation: MaskInterpretation;
 }
 
+/**
+ * How a finish looks, per finish type (architecture §4.4, §7.4). Units are
+ * declared: gloss and strength are 0–1, height in micrometres, bevel in mm.
+ */
+export interface FinishRecipe {
+  /** 0 = satin, 1 = mirror-like coating. */
+  gloss: number;
+  /** Coating opacity of the reflection layer, 0–1. */
+  strength: number;
+  /** Raised UV only: coating height above the stock. */
+  heightUm: number;
+  /** Raised UV only: width of the sloped edge. */
+  bevelMm: number;
+  /** Raised UV only: extra height at the middle of wide tops (0 = flat top). */
+  crownUm: number;
+}
+
+export const DEFAULT_RECIPES: Record<FinishType, FinishRecipe> = {
+  uv: { gloss: 0.9, strength: 1, heightUm: 0, bevelMm: 0, crownUm: 0 },
+  raisedUv: { gloss: 0.95, strength: 1, heightUm: 80, bevelMm: 0.3, crownUm: 0 },
+};
+
+export const RECIPE_LIMITS = {
+  gloss: [0, 1],
+  strength: [0, 1],
+  heightUm: [10, 300],
+  bevelMm: [0.05, 2],
+  crownUm: [0, 100],
+} as const;
+
+/**
+ * Which printed pages the 3D view shows: a leaf's front and back, and a
+ * spread's left and right. Chosen explicitly, never inferred from PDF order
+ * (§7.5). Null front follows the page selected in the panel.
+ */
+export interface SceneAssignment {
+  front: string | null;
+  back: string | null;
+  left: string | null;
+  right: string | null;
+}
+
+/** The paper the pages are printed on: neutral presets, adjustable within limits. */
+export interface Stock {
+  preset: StockPreset | "custom";
+  /** Surface roughness of the uncoated stock, 0–1. */
+  roughness: number;
+  thicknessMm: number;
+}
+
+export type StockPreset = "uncoated" | "matte" | "silk" | "gloss";
+
+export const STOCK_PRESETS: Record<StockPreset, { name: string; roughness: number; thicknessMm: number }> = {
+  uncoated: { name: "Uncoated", roughness: 0.9, thicknessMm: 0.35 },
+  matte: { name: "Matte coated", roughness: 0.7, thicknessMm: 0.3 },
+  silk: { name: "Silk coated", roughness: 0.5, thicknessMm: 0.3 },
+  gloss: { name: "Gloss coated", roughness: 0.3, thicknessMm: 0.25 },
+};
+
+export const STOCK_LIMITS = { roughness: [0.05, 1], thicknessMm: [0.05, 3] } as const;
+
+export function setStock(model: ProjectModel, patch: Partial<Stock>): Outcome {
+  const preset = patch.preset && patch.preset !== "custom" ? STOCK_PRESETS[patch.preset] : null;
+  const next: Stock = preset
+    ? { preset: patch.preset!, roughness: preset.roughness, thicknessMm: preset.thicknessMm }
+    : { ...model.stock, ...patch, preset: patch.preset ?? "custom" };
+  for (const [key, [lo, hi]] of Object.entries(STOCK_LIMITS) as [
+    keyof typeof STOCK_LIMITS,
+    readonly [number, number],
+  ][])
+    if (!(next[key] >= lo && next[key] <= hi))
+      return refuse("invalidStock", `${key} must be between ${lo} and ${hi}.`);
+  return { ok: true, model: { ...model, stock: next } };
+}
+
 export interface ProjectModel {
   roles: Record<string, PageRole>;
   surfaces: PrintSurface[];
   /** In composition order. */
   layers: FinishLayer[];
+  recipes: Record<FinishType, FinishRecipe>;
+  scene: SceneAssignment;
+  stock: Stock;
 }
 
-export const EMPTY_MODEL: ProjectModel = { roles: {}, surfaces: [], layers: [] };
+export const EMPTY_MODEL: ProjectModel = {
+  roles: {},
+  surfaces: [],
+  layers: [],
+  recipes: DEFAULT_RECIPES,
+  scene: { front: null, back: null, left: null, right: null },
+  stock: {
+    preset: "matte",
+    roughness: STOCK_PRESETS.matte.roughness,
+    thicknessMm: STOCK_PRESETS.matte.thicknessMm,
+  },
+};
+
+/** Scene slots that point at a surface that no longer exists become empty. */
+function pruneScene(scene: SceneAssignment, surfaces: PrintSurface[]): SceneAssignment {
+  const ok = (id: string | null) => (id && surfaces.some((s) => s.id === id) ? id : null);
+  return { front: ok(scene.front), back: ok(scene.back), left: ok(scene.left), right: ok(scene.right) };
+}
+
+export function setSceneSlot(
+  model: ProjectModel,
+  slot: keyof SceneAssignment,
+  surfaceId: string | null,
+): Outcome {
+  if (surfaceId !== null && !model.surfaces.some((s) => s.id === surfaceId))
+    return refuse("unknownSurface", "Only a page marked Print can be shown on a leaf or spread.");
+  return { ok: true, model: { ...model, scene: { ...model.scene, [slot]: surfaceId } } };
+}
+
+export function setRecipe(model: ProjectModel, type: FinishType, patch: Partial<FinishRecipe>): Outcome {
+  const next = { ...model.recipes[type], ...patch };
+  for (const [key, [lo, hi]] of Object.entries(RECIPE_LIMITS) as [
+    keyof FinishRecipe,
+    readonly [number, number],
+  ][])
+    if (
+      !(next[key] >= lo && next[key] <= hi) &&
+      !(type === "uv" && (key === "heightUm" || key === "bevelMm" || key === "crownUm"))
+    )
+      return refuse("invalidRecipe", `${key} must be between ${lo} and ${hi}.`);
+  return { ok: true, model: { ...model, recipes: { ...model.recipes, [type]: next } } };
+}
 
 export type Refusal = { ok: false; code: string; message: string };
 export type Outcome = { ok: true; model: ProjectModel } | Refusal;
@@ -130,7 +249,7 @@ export function setRole(
         interpretation: DEFAULT_INTERPRETATION,
       },
     ];
-  return { roles, surfaces, layers };
+  return { ...model, roles, surfaces, layers, scene: pruneScene(model.scene, surfaces) };
 }
 
 export function addLayer(model: ProjectModel, ref: PageRef, type: FinishType, newId: () => string): Outcome {
@@ -221,10 +340,13 @@ export function removeSource(model: ProjectModel, sourceId: string): ProjectMode
     Object.entries(model.roles).filter(([k]) => !k.startsWith(`${sourceId}:`)),
   );
   const gone = new Set(model.surfaces.filter((s) => s.artwork.sourceId === sourceId).map((s) => s.id));
+  const surfaces = model.surfaces.filter((s) => !gone.has(s.id));
   return {
+    ...model,
     roles,
-    surfaces: model.surfaces.filter((s) => !gone.has(s.id)),
+    surfaces,
     layers: model.layers.map((l) => (l.target && gone.has(l.target) ? { ...l, target: null } : l)),
+    scene: pruneScene(model.scene, surfaces),
   };
 }
 

@@ -44,30 +44,42 @@ export function coverageFromPixels(
 
 /** Three box-blur passes in each direction: a close, linear-time approximation of a Gaussian. */
 export function boxBlur(src: Uint8Array, width: number, height: number, radius: number): Uint8Array {
-  let a = Float32Array.from(src);
-  let b = new Float32Array(a.length);
-  const pass = (from: Float32Array, to: Float32Array, horizontal: boolean) => {
-    const lines = horizontal ? height : width;
-    const len = horizontal ? width : height;
-    const at = (line: number, k: number) => (horizontal ? line * width + k : k * width + line);
-    const span = 2 * radius + 1;
+  let a = new Float32Array(src.length);
+  a.set(src);
+  let b = new Float32Array(src.length);
+  const inv = 1 / (2 * radius + 1);
+  // One sliding-window pass along lines of `len` samples spaced `step` apart, starting at `first(line)`.
+  // Edges extend their last value, so coverage does not fade at the canvas border.
+  const pass = (
+    from: Float32Array,
+    to: Float32Array,
+    lines: number,
+    len: number,
+    lineStride: number,
+    step: number,
+  ) => {
+    const last = (len - 1) * step;
     for (let line = 0; line < lines; line += 1) {
-      let sum = 0;
-      // Edges extend their last value, so coverage does not fade at the canvas border.
-      for (let k = -radius; k <= radius; k += 1) sum += from[at(line, Math.min(len - 1, Math.max(0, k)))];
+      const base = line * lineStride;
+      let sum = from[base] * (radius + 1);
+      for (let k = 1; k <= radius; k += 1) sum += from[base + Math.min(k, len - 1) * step];
       for (let k = 0; k < len; k += 1) {
-        to[at(line, k)] = sum / span;
-        sum += from[at(line, Math.min(len - 1, k + radius + 1))] - from[at(line, Math.max(0, k - radius))];
+        to[base + k * step] = sum * inv;
+        const add = k + radius + 1 < len ? (k + radius + 1) * step : last;
+        const sub = k - radius > 0 ? (k - radius) * step : 0;
+        sum += from[base + add] - from[base + sub];
       }
     }
   };
   for (let n = 0; n < 3; n += 1) {
-    pass(a, b, true);
+    pass(a, b, height, width, width, 1);
     [a, b] = [b, a];
-    pass(a, b, false);
+    pass(a, b, width, height, 1, width);
     [a, b] = [b, a];
   }
-  return Uint8Array.from(a, (v) => Math.round(v));
+  const out = new Uint8Array(src.length);
+  for (let i = 0; i < out.length; i += 1) out[i] = Math.round(a[i]);
+  return out;
 }
 
 /**

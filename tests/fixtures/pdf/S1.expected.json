@@ -1,0 +1,62 @@
+{
+  "fixture": "S1",
+  "description": "Leaf and spread surfaces: a front and a back (A5), a left page (A5) and an unequal right page (152 × 200 mm); each has a 20 mm mark 10 mm from its top-left trim corner, so orientation can be read from either side",
+  "pages": [
+    {
+      "page": 0,
+      "role": "front",
+      "trimMm": [
+        148,
+        210
+      ],
+      "markMm": [
+        10,
+        180,
+        20,
+        20
+      ]
+    },
+    {
+      "page": 1,
+      "role": "back",
+      "trimMm": [
+        148,
+        210
+      ],
+      "markMm": [
+        10,
+        180,
+        20,
+        20
+      ]
+    },
+    {
+      "page": 2,
+      "role": "left",
+      "trimMm": [
+        148,
+        210
+      ],
+      "markMm": [
+        10,
+        180,
+        20,
+        20
+      ]
+    },
+    {
+      "page": 3,
+      "role": "right",
+      "trimMm": [
+        152,
+        200
+      ],
+      "markMm": [
+        10,
+        170,
+        20,
+        20
+      ]
+    }
+  ]
+}

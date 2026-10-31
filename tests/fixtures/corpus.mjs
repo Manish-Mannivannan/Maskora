@@ -853,6 +853,128 @@ const K2m = () => {
   };
 };
 
+// ---------------------------------------------------------------------------
+// Page and spread surfaces (step 1.3)
+// ---------------------------------------------------------------------------
+
+const S1 = () => {
+  const mark = [10, 0, 20, 20];
+  const at = (trim) => [mark[0], trim[1] - 10 - mark[3], mark[2], mark[3]];
+  const pages = [
+    { role: "front", trimMm: [148, 210], tint: [0.98, 0.94, 0.85], color: [0.8, 0.1, 0.1] },
+    { role: "back", trimMm: [148, 210], tint: [0.85, 0.92, 0.98], color: [0.1, 0.2, 0.8] },
+    { role: "left", trimMm: [148, 210], tint: [0.88, 0.97, 0.88], color: [0.1, 0.55, 0.2] },
+    { role: "right", trimMm: [152, 200], tint: [0.97, 0.9, 0.97], color: [0.5, 0.1, 0.5] },
+  ];
+  return {
+    pdf: makeDoc({
+      pages: pages.map((p) =>
+        maskPage({ trimMm: p.trimMm, background: p.tint, shapes: [at(p.trimMm)], color: p.color }),
+      ),
+    }),
+    expected: {
+      description:
+        "Leaf and spread surfaces: a front and a back (A5), a left page (A5) and an unequal right page (152 × 200 mm); each has a 20 mm mark 10 mm from its top-left trim corner, so orientation can be read from either side",
+      pages: pages.map((p, page) => ({ page, role: p.role, trimMm: p.trimMm, markMm: at(p.trimMm) })),
+    },
+  };
+};
+
+// ---------------------------------------------------------------------------
+// Raised UV shapes (step 1.3, architecture §17.2)
+// ---------------------------------------------------------------------------
+
+/** A closed circle path from four cubic Béziers, centre and radius in mm from the trim's lower-left corner. */
+function circle(cx, cy, r) {
+  const k = 0.5522847498 * r;
+  const P = (x, y) => `${pt(3 + x)} ${pt(3 + y)}`;
+  return (
+    `${P(cx + r, cy)} m\n` +
+    `${P(cx + r, cy + k)} ${P(cx + k, cy + r)} ${P(cx, cy + r)} c\n` +
+    `${P(cx - k, cy + r)} ${P(cx - r, cy + k)} ${P(cx - r, cy)} c\n` +
+    `${P(cx - r, cy - k)} ${P(cx - k, cy - r)} ${P(cx, cy - r)} c\n` +
+    `${P(cx + k, cy - r)} ${P(cx + r, cy - k)} ${P(cx + r, cy)} c\nh\n`
+  );
+}
+const rectPath = ([x, y, w, h]) => `${pt(3 + x)} ${pt(3 + y)} ${pt(w)} ${pt(h)} re\n`;
+
+const R3 = () => {
+  const shapes = {
+    rectangle: { rect: [10, 110, 30, 15], plateaus: 1, fullHeight: true },
+    ring: { centre: [72, 118], outer: 12, inner: 6, plateaus: 1, fullHeight: true },
+    dumbbell: {
+      discs: [
+        [22, 70],
+        [48, 70],
+      ],
+      radius: 6,
+      neck: [22, 69.8, 26, 0.4],
+      plateaus: 2,
+      fullHeight: true,
+    },
+    strokeWide: { rect: [15, 39.875, 70, 0.25], plateaus: 0, fullHeight: false },
+    strokeFine: { rect: [15, 24.925, 70, 0.15], plateaus: 0, fullHeight: false },
+  };
+  const mask = maskPage({});
+  mask.content =
+    "0 0 0 rg\n" +
+    rectPath(shapes.rectangle.rect) +
+    "f\n" +
+    circle(...shapes.ring.centre, shapes.ring.outer) +
+    circle(...shapes.ring.centre, shapes.ring.inner) +
+    "f*\n" +
+    circle(...shapes.dumbbell.discs[0], shapes.dumbbell.radius) +
+    circle(...shapes.dumbbell.discs[1], shapes.dumbbell.radius) +
+    rectPath(shapes.dumbbell.neck) +
+    "f\n" +
+    rectPath(shapes.strokeWide.rect) +
+    "f\n" +
+    rectPath(shapes.strokeFine.rect) +
+    "f\n";
+  return {
+    pdf: makeDoc({ pages: [artworkPage([0.96, 0.95, 0.92]), mask] }),
+    expected: {
+      description:
+        "Raised-UV relief shapes on a 100 × 150 mm trim: a rectangle, a ring with a hole (curves, even-odd), a dumbbell whose 0.4 mm neck is narrower than twice a 0.3 mm bevel (its top must split in two), and strokes 0.25 mm and 0.15 mm wide (too thin to reach full height, but must not disappear)",
+      bevelMm: 0.3,
+      shapes,
+    },
+  };
+};
+
+/**
+ * A detailed raised-UV mask in the manner of production work: a dense field of
+ * small dots (a pattern varnish) and rows of thin text-like strokes. It is
+ * synthetic, standing in for detail; it is not a real production file.
+ */
+const R4 = () => {
+  const dots = { radius: 0.8, pitch: 3, from: [2, 32], to: [98, 148] };
+  const lines = { count: 8, widthMm: 0.3, lengthMm: 60, from: [20, 6], gap: 3 };
+  let mask = "0 0 0 rg\n";
+  let n = 0;
+  for (let y = dots.from[1]; y <= dots.to[1]; y += dots.pitch)
+    for (let x = dots.from[0]; x <= dots.to[0]; x += dots.pitch) {
+      mask += circle(x, y, dots.radius);
+      n += 1;
+    }
+  mask += "f\n";
+  for (let k = 0; k < lines.count; k += 1)
+    mask += rectPath([lines.from[0], lines.from[1] + k * lines.gap, lines.lengthMm, lines.widthMm]);
+  mask += "f\n";
+  const page = maskPage({});
+  page.content = mask;
+  return {
+    pdf: makeDoc({ pages: [artworkPage([0.95, 0.93, 0.9]), page, artworkPage([0.88, 0.92, 0.97])] }),
+    expected: {
+      description:
+        "A detailed raised-UV mask (pattern dots and thin text-like strokes) for budget, repeated-edit and page-switching tests; synthetic, not a production file",
+      shapes: n + lines.count,
+      dots: { ...dots, count: n },
+      lines,
+    },
+  };
+};
+
 export const CORPUS = {
   G3,
   G4,
@@ -879,4 +1001,7 @@ export const CORPUS = {
   K1,
   K2a,
   K2m,
+  S1,
+  R3,
+  R4,
 };

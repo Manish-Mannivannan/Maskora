@@ -1,0 +1,68 @@
+{
+  "fixture": "R3",
+  "description": "Raised-UV relief shapes on a 100 × 150 mm trim: a rectangle, a ring with a hole (curves, even-odd), a dumbbell whose 0.4 mm neck is narrower than twice a 0.3 mm bevel (its top must split in two), and strokes 0.25 mm and 0.15 mm wide (too thin to reach full height, but must not disappear)",
+  "bevelMm": 0.3,
+  "shapes": {
+    "rectangle": {
+      "rect": [
+        10,
+        110,
+        30,
+        15
+      ],
+      "plateaus": 1,
+      "fullHeight": true
+    },
+    "ring": {
+      "centre": [
+        72,
+        118
+      ],
+      "outer": 12,
+      "inner": 6,
+      "plateaus": 1,
+      "fullHeight": true
+    },
+    "dumbbell": {
+      "discs": [
+        [
+          22,
+          70
+        ],
+        [
+          48,
+          70
+        ]
+      ],
+      "radius": 6,
+      "neck": [
+        22,
+        69.8,
+        26,
+        0.4
+      ],
+      "plateaus": 2,
+      "fullHeight": true
+    },
+    "strokeWide": {
+      "rect": [
+        15,
+        39.875,
+        70,
+        0.25
+      ],
+      "plateaus": 0,
+      "fullHeight": false
+    },
+    "strokeFine": {
+      "rect": [
+        15,
+        24.925,
+        70,
+        0.15
+      ],
+      "plateaus": 0,
+      "fullHeight": false
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "fixture": "R4",
+  "description": "A detailed raised-UV mask (pattern dots and thin text-like strokes) for budget, repeated-edit and page-switching tests; synthetic, not a production file",
+  "shapes": 1295,
+  "dots": {
+    "radius": 0.8,
+    "pitch": 3,
+    "from": [
+      2,
+      32
+    ],
+    "to": [
+      98,
+      148
+    ],
+    "count": 1287
+  },
+  "lines": {
+    "count": 8,
+    "widthMm": 0.3,
+    "lengthMm": 60,
+    "from": [
+      20,
+      6
+    ],
+    "gap": 3
+  }
+}

@@ -9,15 +9,15 @@
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { SourcesSection } from "@/features/document/SourcesSection";
-import { pageName, usePageSummaries } from "@/features/document/usePages";
 import { FinishesSection } from "@/features/finishes/FinishesSection";
 import RegistrationView from "@/features/registration/RegistrationView";
 import { PageInspector } from "@/features/document/PageInspector";
 import { PagesSection } from "@/features/document/PagesSection";
 import { ProjectProvider, useProject } from "@/project/ProjectContext";
 import { normalizeAngles, type LightAngles } from "@/rendering/lighting";
-import type { InteractionMode } from "@/rendering/Viewport";
+import type { CameraPreset, InteractionMode } from "@/rendering/Viewport";
 import { PANEL_DEFAULT, PANEL_KEY_STEP, PANEL_MAX, PANEL_MIN, clampPanelWidth } from "./panel";
+import { StockControls, ViewControls } from "./SceneControls";
 import { Section } from "./Section";
 
 // WebGL exists only in the window, never during the static export's prerender.
@@ -25,12 +25,6 @@ const Viewport = dynamic(() => import("@/rendering/Viewport"), {
   ssr: false,
   loading: () => <div className="viewport viewport-loading">Preparing viewport…</div>,
 });
-
-declare global {
-  interface Window {
-    __maskora?: { cspViolations: string[] };
-  }
-}
 
 export default function Workspace() {
   return (
@@ -44,59 +38,6 @@ function PagesSummary() {
   const [{ sources }] = useProject();
   const total = sources.reduce((n, s) => n + s.pageCount, 0);
   return total ? <>{total}</> : null;
-}
-
-function ViewControls({ onResetCamera }: { onResetCamera: () => void }) {
-  const [{ view, model, sources }, store] = useProject();
-  const summaries = usePageSummaries();
-  return (
-    <>
-      <div className="segmented" role="radiogroup" aria-label="Main view">
-        <button
-          type="button"
-          role="radio"
-          aria-checked={view.mode === "3d"}
-          data-testid="view-3d"
-          onClick={() => store.setView({ mode: "3d" })}
-        >
-          3D view
-        </button>
-        <button
-          type="button"
-          role="radio"
-          aria-checked={view.mode === "registration"}
-          data-testid="view-registration"
-          onClick={() => store.setView({ mode: "registration" })}
-        >
-          Registration
-        </button>
-      </div>
-      {view.mode === "registration" ? (
-        <label>
-          Printed page shown
-          <select
-            data-testid="registration-surface"
-            value={view.surfaceId ?? ""}
-            onChange={(e) => store.setView({ surfaceId: e.target.value || null })}
-          >
-            <option value="">Follow the selected finish</option>
-            {model.surfaces.map((s) => (
-              <option key={s.id} value={s.id}>
-                {pageName(sources, summaries, s.artwork)}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : (
-        <>
-          <button type="button" data-testid="reset-camera" onClick={onResetCamera}>
-            Reset camera
-          </button>
-          <p className="hint">Camera: left-drag orbits, right-drag pans, wheel zooms.</p>
-        </>
-      )}
-    </>
-  );
 }
 
 function MainView({ children }: { children: React.ReactNode }) {
@@ -117,7 +58,19 @@ function Shell() {
   const [mode, setMode] = useState<InteractionMode>("camera");
   const [light, setLight] = useState<LightAngles>({ azimuth: 35, elevation: 40 });
   const [intensity, setIntensity] = useState(2.5);
-  const [resetSignal, setResetSignal] = useState(0);
+  const [camera, setCamera] = useState<{ kind: CameraPreset; n: number }>({ kind: "reset", n: 0 });
+  const [environmentDeg, setEnvironmentDeg] = useState(0);
+  const applyLightPreset = (preset: "studio" | "grazing") => {
+    // Studio: soft and high. Grazing: from the left, 8° off the upright page's surface (azimuth 278°, 10° up),
+    // so the page is lit at a shallow angle and relief edges and shadows show. Azimuth 270° would run
+    // exactly along the page plane and light it not at all.
+    const p =
+      preset === "studio"
+        ? { azimuth: 35, elevation: 40, intensity: 2.5 }
+        : { azimuth: 278, elevation: 10, intensity: 3.2 };
+    setLight({ azimuth: p.azimuth, elevation: p.elevation });
+    setIntensity(p.intensity);
+  };
   const resizing = useRef<{ x: number; width: number } | null>(null);
 
   // Record content-security-policy violations so a smoke run can prove none occurred.
@@ -155,7 +108,19 @@ function Shell() {
           <FinishesSection />
         </Section>
 
+        <Section id="stock" title="Stock">
+          <StockControls />
+        </Section>
+
         <Section id="lighting" title="Lighting">
+          <div className="row">
+            <button type="button" data-testid="light-studio" onClick={() => applyLightPreset("studio")}>
+              Studio light
+            </button>
+            <button type="button" data-testid="light-grazing" onClick={() => applyLightPreset("grazing")}>
+              Grazing light
+            </button>
+          </div>
           <div className="segmented" role="radiogroup" aria-label="Pointer drag moves">
             <button
               type="button"
@@ -222,10 +187,27 @@ function Shell() {
             />
             <output>{intensity.toFixed(1)}</output>
           </label>
+          <label>
+            Environment rotation (°)
+            <input
+              type="range"
+              min={0}
+              max={359}
+              step={1}
+              value={environmentDeg}
+              onChange={(e) => setEnvironmentDeg(Number(e.target.value))}
+            />
+            <input
+              type="number"
+              data-testid="env-rotation"
+              value={environmentDeg}
+              onChange={(e) => setEnvironmentDeg(((Number(e.target.value) % 360) + 360) % 360 || 0)}
+            />
+          </label>
         </Section>
 
         <Section id="view" title="View">
-          <ViewControls onResetCamera={() => setResetSignal((n) => n + 1)} />
+          <ViewControls onCamera={(kind) => setCamera((c) => ({ kind, n: c.n + 1 }))} />
         </Section>
       </aside>
 
@@ -260,7 +242,8 @@ function Shell() {
           light={light}
           intensity={intensity}
           onLightChange={setLight}
-          resetSignal={resetSignal}
+          camera={camera}
+          environmentDeg={environmentDeg}
         />
       </MainView>
     </div>

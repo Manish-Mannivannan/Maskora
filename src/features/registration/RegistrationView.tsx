@@ -12,25 +12,23 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { pageName, usePageSummaries } from "@/features/document/usePages";
-import { colorize, OVERLAY_COLORS } from "@/finish/coverage";
-import { frameOf, runRegistration, type LayerInput, type RegistrationResult } from "@/finish/pipeline";
+import { colorize, compose, OVERLAY_COLORS } from "@/finish/coverage";
+import { frameOf } from "@/finish/pipeline";
+import { useFinish } from "@/finish/useFinish";
 import { FINISH_NAMES, layerProblem, pageKey } from "@/project/model";
 import { useProject } from "@/project/ProjectContext";
 
 type Warning = { code: string; layer?: string; message: string };
 
 export default function RegistrationView() {
-  const [{ model, sources, view }, store] = useProject();
+  const [{ model, sources, view }] = useProject();
   const summaries = usePageSummaries();
   const [stage, setStage] = useState<HTMLDivElement | null>(null);
   const artCanvas = useRef<HTMLCanvasElement>(null);
   const overlayCanvas = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState<[number, number]>([0, 0]);
-  const [result, setResult] = useState<RegistrationResult | null>(null);
-  const [state, setState] = useState<"idle" | "rendering" | "ready" | "failed">("idle");
-  const [error, setError] = useState("");
 
-  const derived = useMemo(() => {
+  const { list, surface, artSource, artSummary, targeting, renderable } = useMemo(() => {
     const list = sources.map((s) => ({ id: s.id, pageCount: s.pageCount }));
     const selectedLayer = model.layers.find((l) => l.id === view.selectedLayer);
     const surface =
@@ -43,7 +41,12 @@ export default function RegistrationView() {
     const renderable = targeting.filter((l) => l.enabled && !layerProblem(model, l, list));
     return { list, surface, artSource, artSummary, targeting, renderable };
   }, [model, sources, summaries, view.surfaceId, view.selectedLayer]);
-  const { list, surface, artSource, artSummary, targeting, renderable } = derived;
+
+  // The same shared job the 3D material uses: one result, one resolution.
+  const finish = useFinish(surface);
+  const result = finish.status === "ready" || finish.status === "rendering" ? finish.result : null;
+  const state = finish.status === "none" ? "idle" : finish.status;
+  const error = finish.status === "failed" ? finish.message : "";
 
   useEffect(() => {
     if (!stage) return;
@@ -52,59 +55,7 @@ export default function RegistrationView() {
     return () => ro.disconnect();
   }, [stage]);
 
-  // Everything the result depends on, as one value: a change re-runs the pipeline.
-  const inputs = useMemo(() => {
-    const { surface, artSource, artSummary, renderable } = derived;
-    if (!surface || !artSource || !artSummary || !frameOf(artSummary, surface.box) || !size[0]) return null;
-    const layers = renderable.flatMap((layer) => {
-      if (layer.mask.kind !== "pdfPage") return [];
-      const ref = layer.mask;
-      const src = sources.find((s) => s.id === ref.sourceId)!;
-      const summary = summaries.get(pageKey(ref));
-      return summary ? [{ layer, src, summary }] : [];
-    });
-    return { surface, artSource, artSummary, layers, hidden: view.hiddenLayers, size };
-  }, [derived, sources, summaries, view.hiddenLayers, size]);
-
-  useEffect(() => {
-    if (!inputs) return;
-    const artSession = store.session(inputs.artSource.id, inputs.artSource.revision);
-    if (!artSession) return;
-    const layerInputs: LayerInput[] = [];
-    for (const { layer, src, summary } of inputs.layers) {
-      const session = store.session(src.id, src.revision);
-      if (session) layerInputs.push({ layer, mask: { session, summary } });
-    }
-    const abort = new AbortController();
-    const dpr = window.devicePixelRatio || 1;
-    const timer = setTimeout(() => {
-      setState("rendering");
-      runRegistration(
-        inputs.surface,
-        { session: artSession, summary: inputs.artSummary },
-        layerInputs,
-        new Set(inputs.hidden),
-        Math.min(4096, Math.round(Math.max(...inputs.size) * dpr)),
-        abort.signal,
-      ).then(
-        (r) => {
-          if (abort.signal.aborted) return;
-          setResult(r);
-          setState("ready");
-        },
-        (e: Error) => {
-          if (abort.signal.aborted) return;
-          setError(e?.message ?? String(e));
-          setState("failed");
-        },
-      );
-    }, 120);
-    return () => {
-      clearTimeout(timer);
-      abort.abort();
-    };
-  }, [inputs, store]);
-
+  const hiddenKey = view.hiddenLayers.join(",");
   useEffect(() => {
     if (!result || !artCanvas.current || !overlayCanvas.current) return;
     const { width, height } = result.plan;
@@ -113,9 +64,15 @@ export default function RegistrationView() {
       c.height = height;
     }
     artCanvas.current.getContext("2d")!.drawImage(result.artwork, 0, 0);
-    const overlay = colorize(result.shown, { uv: true, raisedUv: true });
+    const hidden = new Set(hiddenKey.split(","));
+    const shown = compose(
+      width,
+      height,
+      result.coverages.filter((c) => !hidden.has(c.id)),
+    ).maps;
+    const overlay = colorize(shown, { uv: true, raisedUv: true });
     overlayCanvas.current.getContext("2d")!.putImageData(new ImageData(overlay, width, height), 0, 0);
-  }, [result]);
+  }, [result, hiddenKey]);
 
   if (!surface)
     return (
@@ -209,6 +166,7 @@ export default function RegistrationView() {
             })}
             data-anchor={JSON.stringify(frameOf(artSummary!, surface.box)?.anchor)}
             data-user-unit={artSummary!.userUnit}
+            data-digest={result!.digest}
           >
             <canvas ref={artCanvas} aria-label="Artwork" />
             <canvas ref={overlayCanvas} data-testid="overlay" aria-label="Finish coverage overlay" />

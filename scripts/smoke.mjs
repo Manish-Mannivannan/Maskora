@@ -156,9 +156,7 @@ const registered = async () => {
  * The overlay colour at trim-relative millimetre positions, located from the
  * view's own render plan with the PDF.js viewport convention.
  */
-const overlayAt = (pointsMm) =>
-  q(
-    `const root = document.querySelector('[data-testid="registration-page"]');
+const overlayScript = `const root = document.querySelector('[data-testid="registration-page"]');
     const plan = JSON.parse(root.dataset.plan), anchor = JSON.parse(root.dataset.anchor);
     const k = Number(root.dataset.userUnit) * 25.4 / 72;
     const ctx = document.querySelector('[data-testid="overlay"]').getContext('2d', { willReadFrequently: true });
@@ -169,10 +167,43 @@ const overlayAt = (pointsMm) =>
     };
     return arguments[0].map(([mx, my]) => {
       const [dx, dy] = base([anchor[0] + mx / k, anchor[1] + my / k]);
-      const px = ctx.getImageData(Math.round(dx + plan.offsetX), Math.round(dy + plan.offsetY), 1, 1).data;
+      // The pixel containing the point, as the material probe reads it.
+      const px = ctx.getImageData(Math.floor(dx + plan.offsetX), Math.floor(dy + plan.offsetY), 1, 1).data;
+      if (arguments[1]) return px[3];
       return px[3] === 0 ? "none" : px[0] > 200 && px[2] > 150 ? "raisedUv" : px[2] > 200 && px[0] < 60 ? "uv" : "other:" + [...px];
-    });`,
-    pointsMm,
+    });`;
+const overlayAt = (pointsMm) => q(overlayScript, pointsMm, false);
+/** Overlay alpha (0–255) at the same points: round(coverage × 0.6). */
+const overlayAlpha = (pointsMm) => q(overlayScript, pointsMm, true);
+/** Wait until the 3D view has faces and no finish job is pending. */
+const settled3d = async () => {
+  await sleep(500);
+  await waitUntil(
+    "3D finishes settled",
+    `const v = document.querySelector('[data-testid="viewport"]'); return v.dataset.busy === "false" && v.dataset.faces !== "";`,
+    30000,
+  );
+};
+const faces3d = () => q("return window.__maskora.scene.faces();");
+const material = (face, pointsMm) =>
+  q("return window.__maskora.scene.sample(arguments[0], arguments[1]);", face, pointsMm);
+/** Screen pixels around a face point: max, min and mean luminance in a (2r+1)² window, from the WebGL canvas. */
+const screenLuminance = (face, pointMm, r = 3) =>
+  q(
+    `const p = window.__maskora.scene.project(arguments[0], arguments[1]);
+    const gl = document.querySelector('[data-testid="viewport"] canvas');
+    const k = gl.width / gl.clientWidth;
+    const c = document.createElement('canvas'); c.width = gl.width; c.height = gl.height;
+    const ctx = c.getContext('2d'); ctx.drawImage(gl, 0, 0);
+    const x0 = Math.floor(p[0] * k), y0 = Math.floor(p[1] * k), r = arguments[2];
+    const d = ctx.getImageData(x0 - r, y0 - r, 2 * r + 1, 2 * r + 1).data;
+    const lum = []; const rgb = [0, 0, 0];
+    for (let i = 0; i < d.length; i += 4) { lum.push(0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]); rgb[0] += d[i]; rgb[1] += d[i + 1]; rgb[2] += d[i + 2]; }
+    const n = lum.length;
+    return { max: Math.max(...lum), min: Math.min(...lum), mean: lum.reduce((a, b) => a + b, 0) / n, rgb: rgb.map((v) => v / n) };`,
+    face,
+    pointMm,
+    r,
   );
 const registrationWarnings = () =>
   q(
@@ -528,6 +559,125 @@ try {
   );
   ok("warnings: coverage past the trim, and two ordinary-UV masks overlapping", k1Warnings.join(", "));
   ok("screenshot", await app.screenshot("10-k1-registration"));
+  const k1Digest = await app.attr(await app.find('[data-testid="registration-page"]'), "data-digest");
+  const k1Alpha = await overlayAlpha(k1.samples.map((s) => s.at));
+
+  // 1.3 — K1 in 3D: the page material holds the registration's coverage.
+  await selectThumb(1);
+  await app.click(await app.find('[data-testid="view-3d"]'));
+  await settled3d();
+  const [k1Face] = await faces3d();
+  expect(k1Face.digest === k1Digest, `material ${k1Face.digest} != registration ${k1Digest}`);
+  const k1Mat = await material(
+    "front",
+    k1.samples.map((s) => s.at),
+  );
+  k1.samples.forEach((s, i) => {
+    const m = k1Mat[i];
+    expect(m.hit, `no hit at ${s.at}`);
+    expect(
+      Math.abs(m.hitUv[0] - m.expectedUv[0]) < 1e-5 && Math.abs(m.hitUv[1] - m.expectedUv[1]) < 1e-5,
+      `mesh UV ${m.hitUv} != ${m.expectedUv} at ${s.at}`,
+    );
+    expect(
+      (m.raisedUv >= 128 ? 1 : 0) === s.raisedUv && (m.uv >= 128 ? 1 : 0) === s.uv,
+      `material at ${s.at}: uv ${m.uv}, raised ${m.raisedUv}; expected uv ${s.uv}, raised ${s.raisedUv}`,
+    );
+    // The overlay draws round(max(uv, raised) × 0.6): the same bytes give the same alpha.
+    expect(
+      Math.round(Math.max(m.uv, m.raisedUv) * 0.6) === k1Alpha[i],
+      `alpha ${k1Alpha[i]} vs material ${m.uv}/${m.raisedUv}`,
+    );
+  });
+  ok("K1 in 3D: material digest = registration digest", k1Face.digest);
+  ok(
+    "K1 in 3D: every sample hit through the mesh at the expected UV; raised replaces ordinary UV; overlay alpha matches exactly",
+    k1Mat.map((m) => `${m.uv}/${m.raisedUv}`).join(" "),
+  );
+  ok("screenshot", await app.screenshot("13-k1-3d-studio"));
+
+  // Finish visibility and print-only change the coating drawn, never the coverage held.
+  await app.click(await app.find('[data-testid="show-uv"]'));
+  await sleep(400);
+  const noUv = await material("front", [k1.samples[2].at, k1.samples[0].at]);
+  expect(
+    noUv[0].coat === 0 && noUv[0].uv === 255 && noUv[1].coat === 255,
+    `hide UV: ${JSON.stringify(noUv)}`,
+  );
+  expect((await faces3d())[0].digest === k1Digest, "hiding UV changed the coverage");
+  await app.click(await app.find('[data-testid="show-uv"]'));
+  ok("hiding ordinary UV removes its coating only; raised UV stays; coverage digest unchanged");
+
+  // Fixed light: ordinary UV adds neutral reflection and never recolours the artwork.
+  await app.click(await app.find('[data-testid="light-studio"]'));
+  await app.click(await app.find('[data-testid="camera-front"]'));
+  await sleep(600);
+  const uvPoint = [45, 30];
+  const withUv = await screenLuminance("front", uvPoint, 1);
+  await app.click(await app.find('[data-testid="print-only"]'));
+  await sleep(600);
+  const printOnly = await screenLuminance("front", uvPoint, 1);
+  expect((await faces3d())[0].clearcoat === 0, "print-only still coats");
+  const diff = withUv.rgb.map((v, i) => v - printOnly.rgb[i]);
+  const spread = Math.max(...diff) - Math.min(...diff);
+  expect(
+    spread <= 12,
+    `UV recoloured the artwork: print ${printOnly.rgb.map(Math.round)} → with UV ${withUv.rgb.map(Math.round)}`,
+  );
+  ok(
+    "under fixed studio light, UV over the artwork changes it neutrally (no recolouring)",
+    `print ${printOnly.rgb.map(Math.round)} → UV ${withUv.rgb.map(Math.round)}, channel spread ${spread.toFixed(1)}`,
+  );
+  ok("screenshot", await app.screenshot("14-k1-print-only"));
+  await app.click(await app.find('[data-testid="print-only"]'));
+
+  // Raised UV under grazing light (architecture §17.2): the coating geometry, the default, measured.
+  for (const [field, value] of [
+    ["recipe-raisedUv-heightUm", "150"],
+    ["recipe-raisedUv-bevelMm", "1"],
+  ]) {
+    await app.click(await app.find('[data-testid="finish-look"] summary'));
+    const el = await app.find(`[data-testid="${field}"]`);
+    await app.clear(el);
+    await app.type(el, value);
+    await app.click(await app.find('[data-testid="finish-look"] summary'));
+  }
+  await app.click(await app.find('[data-testid="light-grazing"]'));
+  await app.click(await app.find('[data-testid="camera-front"]'));
+  await settled3d();
+  // The coating mesh is built in a worker after edits settle: wait for the one at 150 µm.
+  await waitUntil(
+    "coating mesh at 150 µm",
+    `const s = window.__maskora.scene.faces()[0]?.stats; return !!s && s.mode === "mesh" && s.profile.heightUm === 150;`,
+    30000,
+  );
+  await sleep(600);
+  // K1's raised mask spans x 10–40 mm, y 20–35 mm; grazing light comes from the left.
+  const relief = async () => ({
+    lit: await screenLuminance("front", [10, 27.5], 4),
+    shade: await screenLuminance("front", [40, 27.5], 4),
+    flat: await screenLuminance("front", [5, 27.5], 4),
+  });
+  const on = await relief();
+  ok("screenshot", await app.screenshot("15-k1-grazing-relief"));
+  await app.click(await app.find('[data-testid="print-only"]'));
+  await sleep(600);
+  const off = await relief();
+  ok("screenshot", await app.screenshot("16-k1-grazing-print-only"));
+  await app.click(await app.find('[data-testid="print-only"]'));
+  // Judged against the print alone at the same spots, so environment light and paper cancel out.
+  expect(on.lit.max > off.lit.max + 15, `lit edge ${on.lit.max} vs print-only ${off.lit.max}`);
+  expect(on.shade.min < off.shade.min - 1.5, `far edge ${on.shade.min} vs print-only ${off.shade.min}`);
+  expect(
+    Math.abs(off.lit.max - off.flat.max) < 8 && Math.abs(off.shade.min - off.flat.min) < 8,
+    `print-only edges differ: ${JSON.stringify(off)}`,
+  );
+  ok(
+    "grazing light: the raised edge facing the light brightens and the far edge darkens; print-only shows neither",
+    `flat ${on.flat.mean.toFixed(0)}, lit edge max ${on.lit.max.toFixed(0)}, far edge min ${on.shade.min.toFixed(0)}; print-only ${off.lit.max.toFixed(0)}/${off.shade.min.toFixed(0)}`,
+  );
+  await app.click(await app.find('[data-testid="light-studio"]'));
+  await app.click(await app.find('[data-testid="view-registration"]'));
 
   // K2: artwork and masks in separate PDFs.
   const k2 = JSON.parse(readFileSync(join(FIXTURES, "K2m.expected.json"), "utf8")).pages;
@@ -663,7 +813,221 @@ try {
   await only(masks[3]);
   expect((await registrationWarnings()).includes("sizeMismatch@K2m.pdf p. 4"), "no size warning");
   ok("a mask whose trim is 1 mm wider is reported as a size mismatch, not corrected");
+  // 1.3 — K2 in 3D: shifts and feathering reach the material exactly as registered.
+  const enableOnly = async (mask) => {
+    for (const m of masks) {
+      await selectLayer(m);
+      const box = await app.find('[data-testid="layer-enabled"]');
+      if (Boolean(await app.attr(box, "checked")) !== (m === mask)) await app.click(box);
+    }
+    await selectLayer(mask);
+    // Hiding is an overlay-only setting; the layer under test must be in the overlay to be compared.
+    const shown = await app.find('[data-testid="layer-shown"]');
+    if (!(await app.attr(shown, "checked"))) await app.click(shown);
+  };
+  /** Registration digest and overlay alpha, then the 3D material at the same points. */
+  const compareViews = async (points) => {
+    await app.click(await app.find('[data-testid="view-registration"]'));
+    await choose("registration-surface", "K2a.pdf p. 1");
+    await registered();
+    const digest = await app.attr(await app.find('[data-testid="registration-page"]'), "data-digest");
+    const alpha = await overlayAlpha(points);
+    await app.click(await app.find('[data-testid="view-3d"]'));
+    await settled3d();
+    const [face] = await faces3d();
+    const mat = await material("front", points);
+    expect(face.digest === digest, `material ${face.digest} != registration ${digest}`);
+    mat.forEach((m, i) =>
+      expect(
+        Math.round(m.uv * 0.6) === alpha[i],
+        `point ${points[i]}: overlay ${alpha[i]}, material ${m.uv}`,
+      ),
+    );
+    return { digest, mat };
+  };
+  await selectThumb(0, "K2a.pdf");
+
+  await enableOnly(masks[2]);
+  // Typed in one go, without waiting: only the final setting may reach either view.
+  for (const [field, value] of [
+    ["offset-x", k2[2].correctionMm[0]],
+    ["offset-y", k2[2].correctionMm[1]],
+  ]) {
+    const el = await app.find(`[data-testid="${field}"]`);
+    await app.clear(el);
+    await app.type(el, String(value));
+  }
+  const shifted = await compareViews(pts);
+  const shiftedCov = shifted.mat.map((m) => (m.uv >= 128 ? 1 : 0));
+  expect(
+    JSON.stringify(shiftedCov) === JSON.stringify(k2[2].samples.map((s) => s.corrected)),
+    `3D shifted ${shiftedCov}`,
+  );
+  ok(
+    "K2 shift in 3D: after rapid edits the material has the corrected coverage, same digest and alpha as the overlay",
+    `${shiftedCov} · ${shifted.digest}`,
+  );
+  ok("screenshot", await app.screenshot("17-k2-shift-3d"));
+
+  await enableOnly(masks[1]);
+  const feather = await app.find('[data-testid="mask-feather"]');
+  await app.clear(feather);
+  await app.type(feather, "1");
+  // The transparent square spans x 60–80 mm at y 40–60 mm: across its left edge.
+  const across = [57, 59, 60, 61, 63, 70].map((x) => [x, 50]);
+  const feathered = await compareViews(across);
+  const values = feathered.mat.map((m) => m.uv);
+  expect(values[0] < 12 && values[5] === 255 && values[4] > 243, `feather far values ${values}`);
+  expect(values[2] > 100 && values[2] < 156, `edge value ${values[2]}`);
+  expect(
+    values.every((v, i) => i === 0 || v >= values[i - 1]),
+    `feather not monotonic ${values}`,
+  );
+  ok("K2 feather 1 mm in 3D: the same soft edge as the overlay, value for value", values.join(" "));
+  ok("screenshot", await app.screenshot("18-k2-feather-3d"));
   await app.click(await app.find('[data-testid="view-3d"]'));
+  await clearSources();
+
+  // 1.3 — S1: leaf front and back, and a spread of unequal pages, at physical size.
+  const s1 = JSON.parse(readFileSync(join(FIXTURES, "S1.expected.json"), "utf8")).pages;
+  expect((await pick("S1")).state === "added", "S1 did not open");
+  await waitUntil(
+    "S1 geometry",
+    `return document.querySelector('[data-testid="geometry-status"]')?.dataset.status === "available";`,
+  );
+  for (const p of [0, 1, 2, 3]) {
+    await selectThumb(p, "S1.pdf");
+    await app.click(await app.find('[data-testid="role-print"]'));
+  }
+  await app.click(await app.find('[data-testid="layout-page"]'));
+  await choose("slot-front", "S1.pdf p. 1");
+  await choose("slot-back", "S1.pdf p. 2");
+  await settled3d();
+  const vp = await app.rect(await app.find('[data-testid="viewport"] canvas'));
+  const markCentre = (p) => [p.markMm[0] + p.markMm[2] / 2, p.markMm[1] + p.markMm[3] / 2];
+  const leaf = await faces3d();
+  const sizeOk = (f, p) =>
+    Math.abs(f.sizeMm[0] - p.trimMm[0]) < 0.05 && Math.abs(f.sizeMm[1] - p.trimMm[1]) < 0.05;
+  expect(
+    sizeOk(
+      leaf.find((f) => f.name === "front"),
+      s1[0],
+    ) &&
+      sizeOk(
+        leaf.find((f) => f.name === "back"),
+        s1[1],
+      ),
+    JSON.stringify(leaf),
+  );
+  await app.click(await app.find('[data-testid="camera-front"]'));
+  await sleep(500);
+  const fromFront = await q(
+    "return window.__maskora.scene.project('front', arguments[0]);",
+    markCentre(s1[0]),
+  );
+  ok("screenshot", await app.screenshot("19-s1-front"));
+  // Keyboard: the Back preset is a button that Enter activates.
+  await q(`document.querySelector('[data-testid="camera-back"]').focus();`);
+  await app.actions([
+    {
+      type: "key",
+      id: "kb",
+      actions: [
+        { type: "keyDown", value: "" },
+        { type: "keyUp", value: "" },
+      ],
+    },
+  ]);
+  await app.releaseActions();
+  await sleep(500);
+  const camBack = await data("camera");
+  const fromBack = await q("return window.__maskora.scene.project('back', arguments[0]);", markCentre(s1[1]));
+  ok("screenshot", await app.screenshot("20-s1-back"));
+  const topLeft = ([x, y]) => x < vp.width / 2 && y < vp.height / 2;
+  expect(camBack[2] < 0, `Enter on Back did not move the camera behind: ${camBack}`);
+  expect(topLeft(fromFront) && topLeft(fromBack), `front mark ${fromFront}, back mark ${fromBack}`);
+  ok(
+    "leaf: front and back at A5 size; each page's top-left mark is at the top left seen from its own side (back not mirrored)",
+  );
+  ok("keyboard: Enter on the focused Back preset turns the camera behind the leaf", JSON.stringify(camBack));
+
+  await app.click(await app.find('[data-testid="layout-spread"]'));
+  await choose("slot-left", "S1.pdf p. 3");
+  await choose("slot-right", "S1.pdf p. 4");
+  await settled3d();
+  await app.click(await app.find('[data-testid="camera-fit"]'));
+  await sleep(500);
+  const spreadFaces = await faces3d();
+  expect(
+    sizeOk(
+      spreadFaces.find((f) => f.name === "left"),
+      s1[2],
+    ) &&
+      sizeOk(
+        spreadFaces.find((f) => f.name === "right"),
+        s1[3],
+      ),
+    JSON.stringify(spreadFaces),
+  );
+  const spineL = await q("return window.__maskora.scene.project('left', arguments[0]);", [
+    s1[2].trimMm[0],
+    s1[2].trimMm[1] / 2,
+  ]);
+  const spineR = await q("return window.__maskora.scene.project('right', arguments[0]);", [
+    0,
+    s1[3].trimMm[1] / 2,
+  ]);
+  expect(Math.abs(spineL[0] - spineR[0]) < 2, `spine ${spineL} vs ${spineR}`);
+  const unequal = await q(
+    `return !!document.querySelector('[data-testid="scene-hud"] [data-code="unequalSizes"]');`,
+  );
+  expect(unequal, "unequal spread not reported");
+  ok(
+    "spread: 148 × 210 and 152 × 200 mm pages meet on the spine; the size difference is reported, not stretched",
+    `${spineL[0].toFixed(1)} / ${spineR[0].toFixed(1)} px`,
+  );
+  ok("screenshot", await app.screenshot("21-s1-spread"));
+
+  // Repeated page switches keep the number of live textures constant.
+  await app.click(await app.find('[data-testid="layout-page"]'));
+  await choose("slot-front", "Follow the selected page");
+  await choose("slot-back", "Blank");
+  await selectThumb(0, "S1.pdf");
+  await settled3d();
+  const memBefore = await q("return window.__maskora.scene.memory();");
+  for (let n = 0; n < 20; n += 1) {
+    await selectThumb(n % 4, "S1.pdf");
+    await settled3d();
+  }
+  await selectThumb(0, "S1.pdf");
+  await settled3d();
+  const memAfter = await q("return window.__maskora.scene.memory();");
+  expect(
+    memAfter.textures <= memBefore.textures && memAfter.geometries <= memBefore.geometries,
+    `${JSON.stringify(memBefore)} → ${JSON.stringify(memAfter)}`,
+  );
+  ok(
+    "20 page switches: live textures and geometries do not grow",
+    `${JSON.stringify(memBefore)} → ${JSON.stringify(memAfter)}`,
+  );
+
+  // Lighting presets and environment rotation are exact settings.
+  await app.click(await app.find('[data-testid="light-grazing"]'));
+  const grazing = await data("light");
+  const env = await app.find('[data-testid="env-rotation"]');
+  await app.clear(env);
+  await app.type(env, "90");
+  await sleep(300);
+  const envDeg = await app.attr(await app.find('[data-testid="viewport"]'), "data-environment");
+  expect(
+    grazing.azimuth === 278 && grazing.elevation === 10 && envDeg === "90",
+    `${JSON.stringify(grazing)}, env ${envDeg}`,
+  );
+  ok(
+    "grazing preset sets 278°/10° (8° off the page surface); environment rotation 90° applied",
+    JSON.stringify(grazing),
+  );
+  await app.click(await app.find('[data-testid="light-studio"]'));
   await clearSources();
 
   // Bypass the UI: call the IPC directly with things the user never selected.

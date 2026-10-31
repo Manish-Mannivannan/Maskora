@@ -21,6 +21,7 @@
     "test": "vitest run",
     "smoke": "node scripts/smoke.mjs",
     "probe:pdf": "node scripts/probe-pdf.mjs",
+    "probe:relief": "node scripts/probe-relief.mjs",
     "check:conventions": "node scripts/check-secrets.mjs && node scripts/check-adr-references.mjs && node scripts/check-versions.mjs && node tests/fixtures/generate.mjs --check",
     "check:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml --all --check && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml",
     "check": "npm run check:conventions && npm run format:check && npm run lint && npm run typecheck && npm run test && npm run check:rust",

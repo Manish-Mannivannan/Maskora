@@ -47,14 +47,27 @@ export interface RegistrationResult {
   plan: RenderPlan;
   artwork: HTMLCanvasElement;
   maps: FinishMaps;
-  /** Maps for the layers shown in the overlay (all enabled layers minus hidden ones). */
-  shown: FinishMaps;
+  /** Each layer's coverage, so a view can show a subset without recomputing. */
+  coverages: LayerCoverage[];
+  /** FNV-1a of the finish maps: equal digests mean byte-identical coverage. */
+  digest: string;
   overlaps: (Overlap & { mm2: number })[];
   layers: LayerResult[];
   /** Device rectangles [x0, y0, x1, y1] for outlines. */
   trim: [number, number, number, number];
   bleed: [number, number, number, number];
   pxPerMm: number;
+}
+
+/** FNV-1a over both finish maps. */
+export function mapsDigest(maps: FinishMaps): string {
+  let h = 0x811c9dc5;
+  for (const plane of [maps.uv, maps.raisedUv])
+    for (let i = 0; i < plane.length; i += 1) {
+      h ^= plane[i];
+      h = Math.imul(h, 0x01000193);
+    }
+  return `${maps.width}x${maps.height}:${(h >>> 0).toString(16).padStart(8, "0")}`;
 }
 
 const box = (s: PageSummary, name: string) => s.boxes.find((b) => b.name === name)?.effective ?? null;
@@ -89,7 +102,6 @@ export async function runRegistration(
   surface: PrintSurface,
   art: PageInput,
   layers: LayerInput[],
-  hidden: Set<string>,
   longestSidePx: number,
   signal: AbortSignal,
 ): Promise<RegistrationResult> {
@@ -169,16 +181,12 @@ export async function runRegistration(
   }
 
   const { maps, overlaps } = compose(width, height, coverages);
-  const shown = compose(
-    width,
-    height,
-    coverages.filter((c) => !hidden.has(c.id)),
-  ).maps;
   return {
     plan,
     artwork,
     maps,
-    shown,
+    coverages,
+    digest: mapsDigest(maps),
     overlaps: overlaps.map((o) => ({ ...o, mm2: o.pixels / pxPerMm ** 2 })),
     layers: results,
     trim,
