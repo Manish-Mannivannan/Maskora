@@ -9,7 +9,8 @@
  * locates or approves it here. Content that changed since the project was
  * saved is held until the user keeps it or chooses another file.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { ReconcilePanel } from "./ReconcilePanel";
 import { useProject } from "@/project/ProjectContext";
 import type { FileState, Relink } from "@/project/store";
 
@@ -24,9 +25,13 @@ function lastText(last: FileState["last"]): string {
     case "opening":
       return "Opening…";
     case "saved":
-      return last.overwritten ? `Saved over ${last.name}.` : `Saved as ${last.name}.`;
+      return `${last.overwritten ? `Saved over ${last.name}.` : `Saved as ${last.name}.`}${last.backup ? ` The file was in an older format; the original is kept as ${last.backup}.` : ""}`;
     case "opened":
-      return `Opened ${last.name}.`;
+      return last.migratedFrom !== null
+        ? `Opened ${last.name}, written in an older format (schema ${last.migratedFrom}). Saving upgrades it and keeps the original beside it.`
+        : `Opened ${last.name}.`;
+    case "recovered":
+      return `Recovered unsaved work${last.name ? ` on ${last.name}` : ""}. It stays unsaved until you save it.`;
     case "cancelled":
       return `${WHAT[last.what]} cancelled; nothing changed.`;
     case "failed":
@@ -47,7 +52,7 @@ function relinkText(r: Relink): string {
     case "failed":
       return `Could not be opened: ${r.message ?? "unknown error"}`;
     case "changed":
-      return "Its content changed since the project was saved. Its pages' assignments are held until you keep them or choose another file.";
+      return "Its content changed since the project was saved. What the project assigns to its pages is held until you keep it, reconcile it page by page, or choose another file.";
     case "ok":
       return r.note === "moved"
         ? "Found at a new location."
@@ -55,7 +60,9 @@ function relinkText(r: Relink): string {
           ? "Approved."
           : r.note === "kept"
             ? "Kept with its new content."
-            : "Back.";
+            : r.note === "reconciled"
+              ? "Reconciled page by page with its new content."
+              : "Back.";
   }
 }
 
@@ -67,6 +74,22 @@ export function ProjectSection() {
   const [confirm, setConfirm] = useState<"new" | "open" | null>(null);
   const busy = file.last.kind === "saving" || file.last.kind === "opening";
   const saveProblem = store.saveProblem();
+  const [reconciling, setReconciling] = useState<string | null>(null);
+
+  // Ctrl+Z undoes and Ctrl+Y or Ctrl+Shift+Z redoes project edits, except while typing in a field.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (!(e.ctrlKey || e.metaKey) || t?.closest("input, textarea, select, [contenteditable]")) return;
+      const k = e.key.toLowerCase();
+      if (k === "z" && !e.shiftKey) store.undo();
+      else if (k === "y" || (k === "z" && e.shiftKey)) store.redo();
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [store]);
 
   const guarded = (action: "new" | "open") => {
     if (dirty && confirm !== action) {
@@ -79,8 +102,25 @@ export function ProjectSection() {
   };
 
   const entries = Object.entries(relink);
+  const offer = state.recoveryOffer;
   return (
     <>
+      {offer ? (
+        <div className="recovery" data-testid="recovery-offer" role="alert">
+          <p>
+            Unsaved work{offer.name ? ` on ${offer.name}` : ""} was left from{" "}
+            {new Date(offer.savedUnix * 1000).toLocaleString()}, when Maskora last closed without saving.
+          </p>
+          <div className="row">
+            <button type="button" data-testid="recovery-recover" onClick={() => void store.recover()}>
+              Recover it
+            </button>
+            <button type="button" data-testid="recovery-discard" onClick={() => void store.discardRecovery()}>
+              Discard it
+            </button>
+          </div>
+        </div>
+      ) : null}
       <p className="project-name" data-testid="project-name" data-dirty={dirty}>
         {file.name ?? "Unsaved project"}
         {dirty ? <span className="dirty"> · unsaved changes</span> : null}
@@ -100,6 +140,24 @@ export function ProjectSection() {
           onClick={() => void store.save(false)}
         >
           Save
+        </button>
+        <button
+          type="button"
+          data-testid="project-undo"
+          disabled={!state.history.undo}
+          title="Undo (Ctrl+Z)"
+          onClick={() => store.undo()}
+        >
+          Undo
+        </button>
+        <button
+          type="button"
+          data-testid="project-redo"
+          disabled={!state.history.redo}
+          title="Redo (Ctrl+Y)"
+          onClick={() => store.redo()}
+        >
+          Redo
         </button>
         <button
           type="button"
@@ -159,6 +217,9 @@ export function ProjectSection() {
                     <button type="button" data-testid="relink-keep" onClick={() => store.keepChanged(id)}>
                       Keep assignments
                     </button>
+                    <button type="button" data-testid="relink-reconcile" onClick={() => setReconciling(id)}>
+                      Reconcile pages…
+                    </button>
                     <button
                       type="button"
                       data-testid="relink-other"
@@ -174,11 +235,14 @@ export function ProjectSection() {
                   </button>
                 ) : null}
               </div>
+              {reconciling === id && r.status === "changed" ? (
+                <ReconcilePanel id={id} onDone={() => setReconciling(null)} />
+              ) : null}
             </li>
           ))}
         </ul>
       ) : null}
-      {lastRefusal?.code === "pagesMissing" ? (
+      {lastRefusal && ["pagesMissing", "pageOutOfRange", "pageTaken"].includes(lastRefusal.code) ? (
         <p className="warning" data-testid="relink-refusal">
           {lastRefusal.message}
         </p>

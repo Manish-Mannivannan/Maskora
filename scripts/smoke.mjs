@@ -26,7 +26,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { projectChecks } from "./smoke-project.mjs";
+import { asideRecovery, crashRecoveryChecks, projectChecks } from "./smoke-project.mjs";
 import { ROOT, openApp } from "./webdriver.mjs";
 
 const run = promisify(execFile);
@@ -42,6 +42,8 @@ function expect(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+// The run writes recovery snapshots of its own; a snapshot already there is kept aside and put back.
+const recovery = asideRecovery();
 const app = await openApp();
 
 const data = async (name) =>
@@ -1060,7 +1062,7 @@ try {
     const done = arguments[arguments.length - 1];
     const invoke = window.__TAURI_INTERNALS__.invoke;
     const attempt = (cmd, args, options) => invoke(cmd, args, options).then(() => "ALLOWED", (e) => typeof e === "string" ? e : JSON.stringify(e));
-    const project = JSON.stringify({ format: "maskora-project", schemaVersion: 1, sources: [{ id: "s", sha256: "a".repeat(64) }] });
+    const project = JSON.stringify({ format: "maskora-project", schemaVersion: 2, sources: [{ id: "s", sha256: "a".repeat(64) }] });
     Promise.all([
       attempt("read_source", { handle: "C:\\\\Windows\\\\win.ini" }),
       attempt("read_source", { handle: "src-00000000000000000000000000000000" }),
@@ -1111,4 +1113,14 @@ try {
 } finally {
   await app.close();
 }
+// 2.1 — a crash and a restart need sessions of their own.
+if (!process.exitCode) {
+  try {
+    await crashRecoveryChecks({ openApp, ok, expect, sleep, dialog, FIXTURES, ROOT });
+  } catch (error) {
+    console.error(`  FAIL ${error.message}`);
+    process.exitCode = 1;
+  }
+}
+recovery.restore();
 if (!process.exitCode) console.log(`smoke: ${passed} checks passed`);

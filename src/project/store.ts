@@ -24,12 +24,28 @@
  * different from what was approved) waits in `relink` for the user to locate
  * or approve it. A source whose content differs from what the project saved
  * is loaded but held: nothing it is assigned to renders or exports until the
- * user keeps it or chooses another file, so index-based assignments are never
- * silently reused on changed pages.
+ * user keeps it, reconciles it page by page, or chooses another file, so
+ * index-based assignments are never silently reused on changed pages.
+ *
+ * Project intent (model, overrides, lighting) has undo and redo. Rapid edits
+ * of the same thing (a dragged slider) are one step. Opening, recovering,
+ * starting anew, removing a source and reconciling one are boundaries: the
+ * history before them is dropped, because it refers to files that changed.
+ *
+ * While there are unsaved changes, a recovery snapshot is kept through native
+ * code, and a snapshot left by a crash is offered back on the next start.
  */
 import type { DocMetadata, OptionalContentSummary, PdfPageFacts, PdfSession } from "@/pdf/adapter";
 import type { GeometryReport, SourceInfo } from "@/native/sources";
-import type { Located, Opened, SaveRequest, Saved, SourceOnOpen } from "@/native/project";
+import type {
+  Located,
+  Opened,
+  RecoveryRequest,
+  Recovered,
+  SaveRequest,
+  Saved,
+  SourceOnOpen,
+} from "@/native/project";
 import {
   available,
   failed,
@@ -39,6 +55,7 @@ import {
   type Capability,
   type Provenance,
 } from "./capability";
+import { mmPerUnit, type Rect } from "@/pdf/transform";
 import { diagnose, type Diagnostic, type PageOverride } from "./facts";
 import * as M from "./model";
 import {
@@ -51,6 +68,7 @@ import {
   type Lighting,
   type ProjectFile,
   type ProjectSource,
+  type SavedPage,
 } from "./projectFile";
 
 export interface ProjectDeps {
@@ -67,7 +85,16 @@ export interface ProjectDeps {
     save(request: SaveRequest): Promise<Saved | null>;
     open(): Promise<Opened | null>;
     locate(fileName: string, token: string | null): Promise<Located | null>;
+    /** Recovery snapshots of unsaved work; without them nothing is kept. */
+    recovery?: {
+      save(request: RecoveryRequest): Promise<void>;
+      peek(): Promise<{ savedUnix: number; meta: string } | null>;
+      recover(): Promise<Recovered | null>;
+      discard(): Promise<void>;
+    };
   };
+  /** Delay before unsaved work is snapshotted, ms (tests shorten it). */
+  recoveryDelayMs?: number;
   appVersion?: string;
   now?(): Date;
 }
@@ -107,7 +134,7 @@ export interface Relink {
   status: "loading" | "missing" | "needsApproval" | "failed" | "changed" | "ok";
   reason?: "unfamiliar" | "contentChanged";
   /** ok: how it came back. */
-  note?: "moved" | "approved" | "kept";
+  note?: "moved" | "approved" | "kept" | "reconciled";
   message?: string;
 }
 
@@ -118,12 +145,15 @@ export interface FileState {
   name: string | null;
   /** `contentKey` of what was last saved or opened, to tell unsaved changes. */
   savedKey: string | null;
+  /** The file is in an older schema; saving upgrades it, keeping the original beside it. */
+  migratedFrom: number | null;
   last:
     | { kind: "idle" }
     | { kind: "saving" }
     | { kind: "opening" }
-    | { kind: "saved"; name: string; overwritten: boolean }
-    | { kind: "opened"; name: string }
+    | { kind: "saved"; name: string; overwritten: boolean; backup: string | null }
+    | { kind: "opened"; name: string; migratedFrom: number | null }
+    | { kind: "recovered"; name: string | null }
     | { kind: "cancelled"; what: "save" | "open" | "locate" }
     | { kind: "failed"; what: "save" | "open" | "locate"; code: string; message: string };
 }
@@ -146,6 +176,27 @@ export interface ProjectState {
   /** Reopened sources that are not simply back, keyed by source id. */
   relink: Record<string, Relink>;
   file: FileState;
+  /** How many steps undo and redo can take. */
+  history: { undo: number; redo: number };
+  /** Unsaved work left by an earlier session, waiting for the user to recover or discard it. */
+  recoveryOffer: { savedUnix: number; name: string | null } | null;
+}
+
+/** The project intent undo and redo move between. */
+type Intent = Pick<ProjectState, "model" | "overrides" | "lighting">;
+
+/** A page the project assigns something on a changed source, for page-by-page reconciliation. */
+export interface ReconcileRow {
+  /** Page index in the file the project was saved with. */
+  page: number;
+  role: M.PageRole;
+  surfaceId: string | null;
+  layerIds: string[];
+  hasOverride: boolean;
+  /** Trim size then and now in mm, when known. */
+  savedSizeMm: [number, number] | null;
+  /** Suggested page in the new file: the same index when it exists. */
+  suggested: number | null;
 }
 
 /** How the project is being looked at; not project intent. */
@@ -187,13 +238,29 @@ const INITIAL: ProjectState = {
   camera: null,
   cameraRestore: 0,
   relink: {},
-  file: { token: null, name: null, savedKey: null, last: { kind: "idle" } },
+  file: { token: null, name: null, savedKey: null, migratedFrom: null, last: { kind: "idle" } },
+  history: { undo: 0, redo: 0 },
+  recoveryOffer: null,
 };
 
-/** What a project file says, without when or by what it was written, or where its sources were. */
+/** Edits of the same kind closer together than this are one undo step. */
+const COALESCE_MS = 800;
+const HISTORY_LIMIT = 100;
+
+/**
+ * What a project file says, without when or by what it was written, where its
+ * sources were, or their page geometry (a fact read from the file, not intent).
+ */
 export function contentKey(file: ProjectFile): string {
   const sources = file.sources
-    .map((s) => ({ id: s.id, name: s.name, size: s.size, sha256: s.sha256, pageCount: s.pageCount }))
+    .map((s) => ({
+      id: s.id,
+      name: s.name,
+      size: s.size,
+      sha256: s.sha256,
+      pageCount: s.pageCount,
+      pages: null,
+    }))
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   return JSON.stringify(toJson({ ...file, savedAt: "", app: { name: "Maskora", version: "" }, sources }));
 }
@@ -206,7 +273,7 @@ export function blockedSources(state: Pick<ProjectState, "relink" | "sources">):
     if (r.status === "changed")
       out.set(
         id,
-        `${name} has changed since the project was saved; keep it or choose another file in Project.`,
+        `${name} has changed since the project was saved; keep, reconcile or replace it in Project.`,
       );
     else if (r.status !== "ok")
       out.set(
@@ -215,6 +282,19 @@ export function blockedSources(state: Pick<ProjectState, "relink" | "sources">):
       );
   }
   return out;
+}
+
+/** The native geometry of every page, as a project file records it. */
+export function savedPages(report: GeometryReport | undefined): SavedPage[] | null {
+  if (!report) return null;
+  const box = (p: GeometryReport["pages"][number], name: string) =>
+    p.boxes.find(([n]) => n === name)?.[1].effective;
+  return report.pages.map((p) => ({
+    mediaBox: box(p, "MediaBox")!,
+    trimBox: box(p, "TrimBox") ?? box(p, "MediaBox")!,
+    rotation: p.rotate.effective,
+    userUnit: p.userUnit,
+  }));
 }
 
 const roundPose = (p: CameraPose): CameraPose => {
@@ -248,6 +328,13 @@ export class ProjectStore {
   #pending: { info: SourceInfo; bytes: Uint8Array; job?: LoadJob } | null = null;
   /** Reopened sources still to load, in the project's order. */
   #queue: LoadJob[] = [];
+  #undo: Intent[] = [];
+  #redo: Intent[] = [];
+  #lastEdit = { at: 0, key: "" };
+  #replaying = false;
+  #recoveryTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Whether this session wrote the snapshot now on disk. */
+  #recoveryWritten = false;
   readonly #newId: () => string;
 
   constructor(
@@ -266,8 +353,67 @@ export class ProjectStore {
   getState = () => this.#state;
 
   #set(patch: Partial<ProjectState>) {
-    this.#state = { ...this.#state, ...patch };
+    const prev = this.#state;
+    let next = { ...prev, ...patch };
+    const changed = (["model", "overrides", "lighting"] as const).filter(
+      (k) => k in patch && patch[k] !== prev[k],
+    );
+    if (changed.length && !this.#replaying) {
+      // One undo step per burst of the same edit: a dragged slider is one change.
+      const key = changed
+        .map((k) =>
+          k === "model"
+            ? `model.${(Object.keys(next.model) as (keyof M.ProjectModel)[]).filter((m) => next.model[m] !== prev.model[m]).join("+")}`
+            : k,
+        )
+        .join(",");
+      const now = Date.now();
+      if (!(key === this.#lastEdit.key && now - this.#lastEdit.at < COALESCE_MS && this.#undo.length)) {
+        this.#undo.push({ model: prev.model, overrides: prev.overrides, lighting: prev.lighting });
+        if (this.#undo.length > HISTORY_LIMIT) this.#undo.shift();
+      }
+      this.#lastEdit = { at: now, key };
+      this.#redo = [];
+      next = { ...next, history: { undo: this.#undo.length, redo: 0 } };
+    }
+    this.#state = next;
     for (const listener of this.#listeners) listener();
+    this.#scheduleRecovery();
+  }
+
+  /** Drop undo history: what it refers to no longer holds. */
+  #boundary() {
+    this.#undo = [];
+    this.#redo = [];
+    this.#lastEdit = { at: 0, key: "" };
+    if (this.#state.history.undo || this.#state.history.redo) this.#set({ history: { undo: 0, redo: 0 } });
+  }
+
+  #replay(from: Intent[], to: Intent[]) {
+    const step = from.pop();
+    if (!step) return false;
+    const s = this.#state;
+    to.push({ model: s.model, overrides: s.overrides, lighting: s.lighting });
+    this.#replaying = true;
+    try {
+      this.#set({
+        ...step,
+        lastRefusal: null,
+        history: { undo: this.#undo.length, redo: this.#redo.length },
+      });
+    } finally {
+      this.#replaying = false;
+    }
+    this.#lastEdit = { at: 0, key: "" };
+    return true;
+  }
+
+  undo() {
+    return this.#replay(this.#undo, this.#redo);
+  }
+
+  redo() {
+    return this.#replay(this.#redo, this.#undo);
   }
 
   #setFile(patch: Partial<FileState>) {
@@ -513,6 +659,7 @@ export class ProjectStore {
       ),
       selected: this.#state.selected?.sourceId === id ? null : this.#state.selected,
     });
+    this.#boundary();
   }
 
   /** Document information is read only when someone asks for it. */
@@ -643,6 +790,7 @@ export class ProjectStore {
           size: x.size,
           sha256: valueOf(x.digest) ?? r?.saved.sha256 ?? "",
           pageCount: x.pageCount,
+          pages: savedPages(valueOf(x.geometry)) ?? r?.saved.pages ?? null,
         };
       }),
       ...Object.entries(s.relink)
@@ -682,6 +830,8 @@ export class ProjectStore {
   isDirty(): boolean {
     const s = this.#state;
     if (s.file.savedKey === null) return s.sources.length > 0 || Object.keys(s.relink).length > 0;
+    // A file in an older schema differs from what a save writes, even with no edits.
+    if (s.file.migratedFrom !== null) return true;
     return contentKey(this.toProjectFile()) !== s.file.savedKey;
   }
 
@@ -690,7 +840,8 @@ export class ProjectStore {
     const s = this.#state;
     if (!this.deps.files) return "Saving is not available here.";
     if (this.restoring) return "Sources are still loading.";
-    if (s.sources.some((x) => x.digest.status === "running")) return "Sources are still being read.";
+    if (s.sources.some((x) => x.digest.status === "running" || x.geometry.status === "running"))
+      return "Sources are still being read.";
     if (s.sources.some((x) => x.digest.status !== "available" && s.relink[x.id]?.status !== "changed"))
       return "A source's content could not be identified, so it cannot be recorded.";
     if (!s.sources.length && !Object.keys(s.relink).length) return "Add a PDF first.";
@@ -735,14 +886,15 @@ export class ProjectStore {
       token: saved.token,
       name: saved.name,
       savedKey: contentKey(project),
-      last: { kind: "saved", name: saved.name, overwritten: saved.overwritten },
+      migratedFrom: null,
+      last: { kind: "saved", name: saved.name, overwritten: saved.overwritten, backup: saved.backup },
     });
   }
 
   /** Close everything and start an empty project. */
   newProject() {
     this.#reset();
-    this.#set({ ...INITIAL });
+    this.#set({ ...INITIAL, recoveryOffer: this.#state.recoveryOffer });
   }
 
   #reset() {
@@ -752,6 +904,7 @@ export class ProjectStore {
     for (const { session } of this.#sessions.values()) void session.close();
     this.#sessions.clear();
     this.#handles.clear();
+    this.#boundary();
   }
 
   /** Open a project file chosen in a dialog, replacing this project. Nothing changes unless it is valid. */
@@ -790,10 +943,18 @@ export class ProjectStore {
       this.#setFile({ last: { kind: "failed", what: "open", code: parsed.code, message: parsed.message } });
       return;
     }
-    this.#restore(parsed.project, opened);
+    this.#restore(parsed.project, opened, {
+      savedKey: contentKey(parsed.project),
+      migratedFrom: parsed.migratedFrom,
+      last: { kind: "opened", name: opened.name, migratedFrom: parsed.migratedFrom },
+    });
   }
 
-  #restore(project: ProjectFile, opened: Opened) {
+  #restore(
+    project: ProjectFile,
+    opened: { token: string | null; name: string | null; sources: SourceOnOpen[] },
+    file: Pick<FileState, "savedKey" | "migratedFrom" | "last">,
+  ) {
     this.#reset();
     const statuses = new Map<string, SourceOnOpen>(opened.sources.map((x) => [x.id, x]));
     const relink: Record<string, Relink> = {};
@@ -821,13 +982,11 @@ export class ProjectStore {
       cameraRestore: this.#state.cameraRestore + 1,
       selected: project.selected,
       relink,
-      file: {
-        token: opened.token,
-        name: opened.name,
-        savedKey: contentKey(project),
-        last: { kind: "opened", name: opened.name },
-      },
+      recoveryOffer: this.#state.recoveryOffer,
+      file: { token: opened.token, name: opened.name, ...file },
     });
+    // Restoring is not an edit: there is nothing before it to undo.
+    this.#boundary();
     this.#queue = queue;
     void this.#next();
   }
@@ -901,13 +1060,220 @@ export class ProjectStore {
       });
       return false;
     }
+    this.#boundary();
     this.#setRelink(id, { saved: r.saved, status: "ok", note: "kept" });
     this.#set({ lastRefusal: null });
     return true;
   }
 
+  /** The pages a held source's assignments use, with what is on each and a suggested new page. */
+  reconcilePlan(id: string): ReconcileRow[] | null {
+    const r = this.#state.relink[id];
+    const source = this.source(id);
+    if (!r || r.status !== "changed" || !source) return null;
+    const s = this.#state;
+    const prefix = `${id}:`;
+    const overrideKeys = Object.keys(s.overrides).filter((k) => k.startsWith(prefix));
+    return M.usedPages(s.model, id, overrideKeys).map((page) => {
+      const saved = r.saved.pages?.[page];
+      const k = saved ? mmPerUnit(saved.userUnit) : 0;
+      return {
+        page,
+        role: M.roleOf(s.model, { sourceId: id, page }),
+        surfaceId: M.surfaceFor(s.model, { sourceId: id, page })?.id ?? null,
+        layerIds: s.model.layers
+          .filter((l) => l.mask.kind === "pdfPage" && l.mask.sourceId === id && l.mask.page === page)
+          .map((l) => l.id),
+        hasOverride: `${prefix}${page}` in s.overrides,
+        savedSizeMm: saved
+          ? [(saved.trimBox[2] - saved.trimBox[0]) * k, (saved.trimBox[3] - saved.trimBox[1]) * k]
+          : null,
+        suggested: page < source.pageCount ? page : null,
+      };
+    });
+  }
+
+  /**
+   * Move a held source's assignments page by page and release it. `mapping`
+   * gives each used page's new page, or null to drop it; box overrides are
+   * carried only for the pages in `keepOverrides`, marked as carried over.
+   * Returns what was dropped, or false if refused.
+   */
+  reconcile(id: string, mapping: Record<number, number | null>, keepOverrides: number[] = []) {
+    const r = this.#state.relink[id];
+    const source = this.source(id);
+    if (!r || r.status !== "changed" || !source) return false;
+    const s = this.#state;
+    const map = (p: number) => mapping[p] ?? null;
+    const out = M.remapSource(s.model, id, map, source.pageCount);
+    if (!out.ok) {
+      this.#set({ lastRefusal: { code: out.code, message: out.message } });
+      return false;
+    }
+    const prefix = `${id}:`;
+    const overrides: Record<string, PageOverride> = {};
+    for (const [key, o] of Object.entries(s.overrides)) {
+      if (!key.startsWith(prefix)) {
+        overrides[key] = o;
+        continue;
+      }
+      const page = Number(key.slice(prefix.length));
+      const to = map(page);
+      if (to === null || !keepOverrides.includes(page)) continue;
+      const carry = (b?: { rect: Rect; derivation: string }) =>
+        b && {
+          rect: b.rect,
+          derivation: `${b.derivation} (carried over from the earlier file's page ${page + 1})`,
+        };
+      overrides[`${prefix}${to}`] = {
+        ...(o.trim ? { trim: carry(o.trim) } : {}),
+        ...(o.bleed ? { bleed: carry(o.bleed) } : {}),
+      };
+    }
+    const removed = new Set(out.effects.removedLayers);
+    const sel = s.selected?.sourceId === id ? map(s.selected.page) : undefined;
+    this.#boundary();
+    this.#replaying = true;
+    try {
+      this.#set({
+        model: out.model,
+        overrides,
+        lastRefusal: null,
+        selected: sel === undefined ? s.selected : sel === null ? null : { sourceId: id, page: sel },
+        view: {
+          ...s.view,
+          hiddenLayers: s.view.hiddenLayers.filter((l) => !removed.has(l)),
+          selectedLayer:
+            s.view.selectedLayer && removed.has(s.view.selectedLayer) ? null : s.view.selectedLayer,
+        },
+      });
+    } finally {
+      this.#replaying = false;
+    }
+    this.#setRelink(id, { saved: r.saved, status: "ok", note: "reconciled" });
+    return out.effects;
+  }
+
+  // Recovery ----------------------------------------------------------------
+
+  /** After every change: keep a snapshot of unsaved work, or forget ours once there is none. */
+  #scheduleRecovery() {
+    const recovery = this.deps.files?.recovery;
+    if (!recovery) return;
+    if (this.#recoveryTimer) clearTimeout(this.#recoveryTimer);
+    this.#recoveryTimer = setTimeout(() => {
+      this.#recoveryTimer = null;
+      void this.#snapshot();
+    }, this.deps.recoveryDelayMs ?? 2000);
+  }
+
+  async #snapshot() {
+    const recovery = this.deps.files?.recovery;
+    const s = this.#state;
+    // An earlier session's work is never overwritten before the user has decided about it.
+    if (!recovery || s.recoveryOffer || this.restoring) return;
+    if (!this.isDirty()) {
+      if (this.#recoveryWritten) {
+        this.#recoveryWritten = false;
+        await recovery.discard().catch(() => undefined);
+      }
+      return;
+    }
+    const loaded = s.sources.filter((x) => x.digest.status === "available" && this.#handles.has(x.id));
+    const meta = JSON.stringify({
+      name: s.file.name,
+      savedKey: s.file.savedKey,
+      migratedFrom: s.file.migratedFrom,
+    });
+    try {
+      await recovery.save({
+        json: JSON.stringify(toJson(this.toProjectFile())),
+        meta,
+        sources: loaded.map((x) => ({
+          id: x.id,
+          handle: this.#handles.get(x.id)!,
+          sha256: valueOf(x.digest)!,
+        })),
+        token: s.file.token,
+      });
+      this.#recoveryWritten = true;
+    } catch {
+      // Not kept this time; the next change tries again.
+    }
+  }
+
+  /** On start: is there unsaved work from an earlier session? */
+  async checkRecovery() {
+    const recovery = this.deps.files?.recovery;
+    if (!recovery) return;
+    const pending = await recovery.peek().catch(() => null);
+    if (!pending) return;
+    let name: string | null = null;
+    try {
+      name = (JSON.parse(pending.meta) as { name?: string | null }).name ?? null;
+    } catch {
+      /* an unreadable note still offers the work */
+    }
+    this.#set({ recoveryOffer: { savedUnix: pending.savedUnix, name } });
+  }
+
+  /** Bring back the earlier session's unsaved work; it stays unsaved until saved. */
+  async recover() {
+    const recovery = this.deps.files?.recovery;
+    if (!recovery || !this.#state.recoveryOffer) return false;
+    const got = await recovery.recover().catch(() => null);
+    const parsed = got ? parseProjectFile(safeJson(got.json)) : null;
+    if (!got || !parsed?.ok) {
+      this.#set({ recoveryOffer: null });
+      this.#setFile({
+        last: {
+          kind: "failed",
+          what: "open",
+          code: "recoveryFailed",
+          message: "The unsaved work could not be read back.",
+        },
+      });
+      return false;
+    }
+    let meta: { name?: string | null; savedKey?: string | null; migratedFrom?: number | null } = {};
+    try {
+      meta = JSON.parse(got.meta);
+    } catch {
+      /* treated as never saved */
+    }
+    this.#state = { ...this.#state, recoveryOffer: null };
+    this.#restore(
+      parsed.project,
+      { token: got.token, name: got.token ? (got.name ?? meta.name ?? null) : null, sources: got.sources },
+      {
+        // Compared with the file it came from, if that still exists: the work is unsaved until saved.
+        savedKey: got.token ? (meta.savedKey ?? null) : null,
+        migratedFrom: got.token ? (meta.migratedFrom ?? null) : null,
+        last: { kind: "recovered", name: meta.name ?? null },
+      },
+    );
+    this.#recoveryWritten = true;
+    return true;
+  }
+
+  async discardRecovery() {
+    const recovery = this.deps.files?.recovery;
+    if (!recovery || !this.#state.recoveryOffer) return;
+    await recovery.discard().catch(() => undefined);
+    this.#set({ recoveryOffer: null });
+  }
+
   dispose() {
     this.#reset();
+    if (this.#recoveryTimer) clearTimeout(this.#recoveryTimer);
+  }
+}
+
+function safeJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
   }
 }
 

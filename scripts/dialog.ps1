@@ -10,6 +10,8 @@
 # dialog open is retried. A save dialog asked to write over an existing file
 # shows "Confirm Save As": -Replace yes confirms it; -Replace no declines,
 # after which the save dialog is dismissed, so the save reads as cancelled.
+# The path is pasted through the clipboard; the text that was there before is
+# put back when the script ends (non-text clipboard contents are not kept).
 # Only the smoke and probe scripts call this; the app never automates its dialog.
 param(
   [string]$Title = "Open PDF",
@@ -22,9 +24,16 @@ param(
 
 $shell = New-Object -ComObject WScript.Shell
 $script:confirmed = $false
+$script:clipboard = Get-Clipboard -Raw -ErrorAction SilentlyContinue
+
+function Finish([int]$code, [string]$problem = "") {
+  if ($null -ne $script:clipboard) { Set-Clipboard -Value $script:clipboard } else { Set-Clipboard -Value $null }
+  if ($problem) { Write-Error $problem }
+  exit $code
+}
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 while (-not $shell.AppActivate($Title)) {
-  if ((Get-Date) -gt $deadline) { Write-Error "dialog '$Title' did not appear"; exit 1 }
+  if ((Get-Date) -gt $deadline) { Finish 1 "dialog '$Title' did not appear" }
   Start-Sleep -Milliseconds 200
 }
 
@@ -48,7 +57,7 @@ function Answer-Confirmation {
 
 for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
   Start-Sleep -Milliseconds (400 * $attempt)
-  if (-not $shell.AppActivate($Title)) { exit 0 }   # already closed
+  if (-not $shell.AppActivate($Title)) { Finish 0 }   # already closed
   if ($Cancel) {
     $shell.SendKeys("{ESC}")
   } else {
@@ -64,8 +73,7 @@ for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
     if ($Replace -ne "" -and (Answer-Confirmation)) { $script:confirmed = $true }
   }
   Start-Sleep -Milliseconds 800
-  if (-not $shell.AppActivate($Title)) { exit 0 }   # the dialog closed: answered
+  if (-not $shell.AppActivate($Title)) { Finish 0 }   # the dialog closed: answered
 }
-if ($Replace -ne "" -and -not $script:confirmed) { Write-Error "no replace confirmation appeared for '$Path'"; exit 1 }
-Write-Error "dialog '$Title' was still open after $Attempts attempts"
-exit 1
+if ($Replace -ne "" -and -not $script:confirmed) { Finish 1 "no replace confirmation appeared for '$Path'" }
+Finish 1 "dialog '$Title' was still open after $Attempts attempts"

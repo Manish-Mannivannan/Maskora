@@ -15,8 +15,18 @@
  *   - no source file changes.
  */
 import { createHash } from "node:crypto";
-import { spawn } from "node:child_process";
-import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, renameSync, statSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import {
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { readPng } from "./png.mjs";
 
@@ -249,7 +259,10 @@ export async function projectChecks(c) {
   const saved = await saveProject(projectPath);
   expect(saved.kind === "saved" && /Saved as job\.maskora\.json/.test(saved.text), JSON.stringify(saved));
   const file = JSON.parse(readFileSync(projectPath, "utf8"));
-  expect(file.format === "maskora-project" && file.schemaVersion === 1, "not a schema-1 project");
+  expect(
+    file.format === "maskora-project" && file.schemaVersion === 2 && file.sources[0].pages?.length === 5,
+    "not a schema-2 project with page geometry",
+  );
   expect(
     file.sources[0].ref.relativePath === "art/K1.pdf" && file.sources[0].ref.fileName === "K1.pdf",
     `ref ${JSON.stringify(file.sources[0].ref)}`,
@@ -351,6 +364,100 @@ export async function projectChecks(c) {
   );
   await click("view-3d");
   ok("screenshot", await app.screenshot("31-project-reopened"));
+
+  // ---------------------------------------------------------------- 2.1: undo, migration, failed save
+  const gloss = () => q(`return document.querySelector('[data-testid="recipe-uv-gloss"]').value;`);
+  const chord = async (key) => {
+    await q("document.activeElement?.blur();");
+    await app.actions([
+      {
+        type: "key",
+        id: "keyboard",
+        actions: [
+          { type: "keyDown", value: "\uE009" },
+          { type: "keyDown", value: key },
+          { type: "keyUp", value: key },
+          { type: "keyUp", value: "\uE009" },
+        ],
+      },
+    ]);
+    await app.releaseActions();
+    await sleep(300);
+  };
+  const glossBefore = await gloss();
+  await setField("recipe-uv-gloss", "0.4");
+  expect((await gloss()) === "0.4", `gloss ${await gloss()}`);
+  await chord("z");
+  expect((await gloss()) === glossBefore, `undo left gloss at ${await gloss()}`);
+  await chord("y");
+  expect((await gloss()) === "0.4", `redo left gloss at ${await gloss()}`);
+  await chord("z");
+  ok(
+    "Ctrl+Z undoes a recipe edit and Ctrl+Y redoes it",
+    `${glossBefore} → 0.4 → ${glossBefore} → 0.4 → ${await gloss()}`,
+  );
+
+  // A project written in schema 1 opens, reads as unsaved, and saving it keeps the original beside it.
+  const oldPath = join(work, "old.maskora.json");
+  const v1 = { ...file, schemaVersion: 1, sources: file.sources.map((x) => ({ ...x, pages: undefined })) };
+  writeFileSync(oldPath, JSON.stringify(v1, null, 2));
+  const v1Bytes = readFileSync(oldPath);
+  await newProject();
+  const openedOld = await openProject(oldPath);
+  expect(/older format \(schema 1\)/.test(openedOld.text), openedOld.text);
+  expect(
+    (await q(`return document.querySelector('[data-testid="project-name"]').dataset.dirty;`)) === "true",
+    "an older-format project reads as saved",
+  );
+  await click("project-save");
+  const upgraded = await fileSettled();
+  const backupPath = join(work, "old (schema 1 backup).maskora.json");
+  expect(/original is kept as old \(schema 1 backup\)\.maskora\.json/.test(upgraded.text), upgraded.text);
+  expect(readFileSync(backupPath).equals(v1Bytes), "the backup is not the original, byte for byte");
+  const now2 = JSON.parse(readFileSync(oldPath, "utf8"));
+  expect(
+    now2.schemaVersion === 2 && now2.sources[0].pages.length === 5,
+    "the saved file is not schema 2 with geometry",
+  );
+  ok(
+    "a schema-1 project opens as unsaved; saving writes schema 2 with page geometry and keeps the original",
+    upgraded.text,
+  );
+
+  // A save that fails leaves the project unsaved and the file as it was.
+  await click("print-only");
+  const lockedBefore = readFileSync(oldPath);
+  const lock = spawn("powershell", [
+    "-NoProfile",
+    "-Command",
+    `$f = [System.IO.File]::Open('${oldPath}', 'Open', 'Read', 'None'); Start-Sleep -Seconds 60; $f.Close()`,
+  ]);
+  await sleep(1500);
+  let failedSave;
+  try {
+    await click("project-save");
+    failedSave = await fileSettled();
+  } finally {
+    lock.kill();
+  }
+  await sleep(500);
+  expect(
+    failedSave.kind === "failed" && /permissionDenied/.test(failedSave.text),
+    JSON.stringify(failedSave),
+  );
+  expect(/still has unsaved changes/.test(failedSave.text), failedSave.text);
+  expect(
+    (await q(`return document.querySelector('[data-testid="project-name"]').dataset.dirty;`)) === "true",
+    "a failed save cleared the unsaved marker",
+  );
+  expect(readFileSync(oldPath).equals(lockedBefore), "a failed save changed the file");
+  ok(
+    "a save that fails (file held open) reads as failed, keeps the project unsaved and the file unchanged",
+    failedSave.text,
+  );
+  await click("print-only");
+  await click("project-save");
+  expect((await fileSettled()).kind === "saved", "saving after the lock was released failed");
 
   // ---------------------------------------------------------------- export
   await click("camera-front");
@@ -636,16 +743,34 @@ export async function projectChecks(c) {
     `return /changed since the project was saved/.test(document.querySelector('[data-testid="scene-hud"] [data-code="sourceBlocked"]')?.textContent ?? "");`,
   );
   ok("approved changed content is held: its assignments do not render until kept", r[0].status);
+  await click("relink-reconcile");
+  await app.waitFor('[data-testid="reconcile"]');
+  const rows = await q(
+    `return [...document.querySelectorAll('[data-testid="reconcile-row"]')].map(r => r.dataset.page + ":" + r.textContent);`,
+  );
+  expect(rows.length === 1 && rows[0].startsWith("1:"), `rows ${rows}`);
+  // The mask was the old file's page 2; in the new file it is page 4.
+  await app.click(await app.find('[data-testid="reconcile-target"] option:nth-child(5)'));
+  await sleep(200);
+  const sizeNote = await q(
+    `return document.querySelector('[data-testid="reconcile-size"]')?.textContent ?? "";`,
+  );
+  const effectsText = await q(
+    `return document.querySelector('[data-testid="reconcile-effects"]').textContent;`,
+  );
   await q(`document.querySelector('[data-section="project"]').scrollIntoView();`);
   ok("screenshot", await app.screenshot("34-relink-held"));
-  await click("relink-keep");
+  await click("reconcile-apply");
   await sleep(300);
   r = await relinks();
-  expect(r[0].status === "ok" && r[0].note === "kept", JSON.stringify(r));
+  expect(r[0].status === "ok" && r[0].note === "reconciled", JSON.stringify(r));
   await settled3d();
   const keptDigest = (await faces3d()).find((f) => f.name === "front").digest;
-  expect(keptDigest !== k2Digest, "kept content rendered the old coverage");
-  ok("kept: the assignments render the new content", keptDigest);
+  expect(keptDigest !== k2Digest, "reconciled content rendered the old coverage");
+  ok(
+    "reconciled page by page: the old page 2's finish moved to the new file's page 4 and renders its coverage",
+    `${keptDigest}; ${sizeNote || "same size"}; ${effectsText}`,
+  );
 
   // Imported: the same project and files copied elsewhere are trusted for nothing.
   const imported = join(work, "imported");
@@ -681,4 +806,117 @@ export async function projectChecks(c) {
     "no source PDF changed: fixtures and the project's copies keep their digests",
     Object.keys(originals).join(", "),
   );
+}
+
+/**
+ * Unsaved work survives a crash (architecture §9.2, §12): with a change made
+ * and its snapshot written, the app is killed, started again, and offers the
+ * work back. Runs in its own sessions after the main smoke; `smoke.mjs` has
+ * already set aside any snapshot that was there before the run.
+ */
+export async function crashRecoveryChecks({ openApp, ok, expect, sleep, dialog, FIXTURES, ROOT }) {
+  const slot = recoverySlot();
+  rmSync(slot, { force: true });
+  const work = join(ROOT, "probe-out", "smoke", `recovery-${Date.now()}`);
+  mkdirSync(work, { recursive: true });
+  const k1 = join(work, "K1.pdf");
+  copyFileSync(join(FIXTURES, "K1.pdf"), k1);
+  let app = await openApp();
+  const q = (script, ...args) => app.exec(script, ...args);
+  const click = async (testid) => app.click(await app.find(`[data-testid="${testid}"]`));
+  const until = async (what, test, timeoutMs = 20000) => {
+    const end = Date.now() + timeoutMs;
+    while (!(await test())) {
+      if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
+      await sleep(250);
+    }
+  };
+  try {
+    await app.waitFor('[data-testid="viewport"] canvas');
+    await click("open-pdf");
+    await dialog(["-Path", k1]);
+    await until(
+      "K1 added",
+      async () =>
+        (await q(`return document.querySelector('[data-testid="geometry-status"]')?.dataset.status;`)) ===
+        "available",
+    );
+    const thickness = await app.find('[data-testid="stock-thickness"]');
+    // Select all, then type: the field is controlled, and clearing it alone is undone on the next render.
+    await app.type(thickness, "a1.2");
+    const typed = await q(`return document.querySelector('[data-testid="stock-thickness"]').value;`);
+    expect(typed === "1.2", `the edit did not take: ${typed}`);
+    await until("recovery snapshot written", async () => existsSync(slot), 15000);
+    execFileSync("taskkill", ["/F", "/IM", "maskora.exe"], { stdio: "ignore" });
+    await app.close().catch(() => undefined);
+    ok("unsaved work was snapshotted, then the app was killed", slot);
+
+    app = await openApp();
+    await app.waitFor('[data-testid="recovery-offer"]');
+    const offer = await q(`return document.querySelector('[data-testid="recovery-offer"]').textContent;`);
+    ok("screenshot", await app.screenshot("36-recovery-offer"));
+    await click("recovery-recover");
+    await until(
+      "recovered sources loaded",
+      async () =>
+        (await q(`return document.querySelector('[data-testid="geometry-status"]')?.dataset.status;`)) ===
+        "available",
+    );
+    const state = await q(`return {
+      thickness: document.querySelector('[data-testid="stock-thickness"]').value,
+      dirty: document.querySelector('[data-testid="project-name"]').dataset.dirty,
+      status: document.querySelector('[data-testid="project-status"]').dataset.kind,
+      relink: document.querySelectorAll('[data-testid="relink"]').length,
+    };`);
+    expect(
+      state.thickness === "1.2" &&
+        state.dirty === "true" &&
+        state.status === "recovered" &&
+        state.relink === 0,
+      JSON.stringify(state),
+    );
+    ok(
+      "after a restart the work is offered, and recovering it brings back the edit, still unsaved",
+      offer.trim(),
+    );
+    await until(
+      "the recovered page drawn",
+      async () =>
+        (await q(
+          `const v = document.querySelector('[data-testid="viewport"]'); return v.dataset.faces !== "" && v.dataset.busy === "false";`,
+        )) === true,
+      30000,
+    );
+    ok("screenshot", await app.screenshot("37-recovered"));
+    // Discarding the work (New, confirmed) forgets the snapshot.
+    await click("project-new");
+    await sleep(150);
+    if (await q(`return !!document.querySelector('[data-testid="project-confirm"]');`))
+      await click("project-new");
+    await until("snapshot forgotten", async () => !existsSync(slot), 15000);
+    ok("once the work is discarded the snapshot is gone");
+  } finally {
+    await app.close().catch(() => undefined);
+  }
+}
+
+/** This installation's recovery snapshot, in local app data. */
+export function recoverySlot() {
+  return join(process.env.LOCALAPPDATA, "com.manis.maskora", "recovery.json");
+}
+
+/**
+ * Keep a snapshot that was there before the run (it may be real unsaved work)
+ * out of the smoke's way; `restore` deletes whatever the run left and puts it back.
+ */
+export function asideRecovery() {
+  const slot = recoverySlot();
+  const aside = `${slot}.smoke-aside`;
+  if (existsSync(slot) && !existsSync(aside)) renameSync(slot, aside);
+  return {
+    restore() {
+      rmSync(slot, { force: true });
+      if (existsSync(aside)) renameSync(aside, slot);
+    },
+  };
 }

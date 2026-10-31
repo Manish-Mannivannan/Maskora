@@ -350,6 +350,107 @@ export function removeSource(model: ProjectModel, sourceId: string): ProjectMode
   };
 }
 
+/** What reconciling a changed source does beyond moving assignments, for the user to confirm first. */
+export interface RemapEffects {
+  /** Old page indices whose role is dropped. */
+  droppedPages: number[];
+  /** Printed pages dropped with their page; layers that targeted them become unassigned. */
+  droppedSurfaces: string[];
+  /** Layers whose mask page was dropped; they are removed, never left pointing at another page. */
+  removedLayers: string[];
+  untargetedLayers: string[];
+}
+
+/**
+ * Move a changed source's assignments page by page (architecture §9.4): every
+ * page the project uses on `sourceId` goes to `map(old)`, or is dropped with
+ * null. Nothing is inferred; the caller supplies the whole mapping, and a
+ * mapping that sends two used pages to one, or to a page the new file lacks,
+ * is refused.
+ */
+export function remapSource(
+  model: ProjectModel,
+  sourceId: string,
+  map: (page: number) => number | null,
+  pageCount: number,
+): { ok: true; model: ProjectModel; effects: RemapEffects } | Refusal {
+  const prefix = `${sourceId}:`;
+  const used = usedPages(model, sourceId);
+  const targets = new Map<number, number>();
+  for (const page of used) {
+    const to = map(page);
+    if (to === null) continue;
+    if (!Number.isInteger(to) || to < 0 || to >= pageCount)
+      return refuse(
+        "pageOutOfRange",
+        `Page ${page + 1} cannot go to page ${to + 1}: the file has ${pageCount}.`,
+      );
+    const taken = [...targets].find(([, t]) => t === to);
+    if (taken)
+      return refuse("pageTaken", `Pages ${taken[0] + 1} and ${page + 1} cannot both go to page ${to + 1}.`);
+    targets.set(page, to);
+  }
+  const effects: RemapEffects = {
+    droppedPages: [],
+    droppedSurfaces: [],
+    removedLayers: [],
+    untargetedLayers: [],
+  };
+  effects.droppedPages = used.filter((p) => !targets.has(p));
+
+  const roles: Record<string, PageRole> = {};
+  for (const [key, role] of Object.entries(model.roles)) {
+    if (!key.startsWith(prefix)) roles[key] = role;
+    else {
+      const to = targets.get(Number(key.slice(prefix.length)));
+      if (to !== undefined) roles[`${prefix}${to}`] = role;
+    }
+  }
+  const surfaces = model.surfaces.flatMap((s) => {
+    if (s.artwork.sourceId !== sourceId) return [s];
+    const to = targets.get(s.artwork.page);
+    if (to === undefined) {
+      effects.droppedSurfaces.push(s.id);
+      return [];
+    }
+    return [{ ...s, artwork: { sourceId, page: to } }];
+  });
+  const gone = new Set(effects.droppedSurfaces);
+  const layers = model.layers.flatMap((l) => {
+    let layer = l;
+    if (l.mask.kind === "pdfPage" && l.mask.sourceId === sourceId) {
+      const to = targets.get(l.mask.page);
+      if (to === undefined) {
+        effects.removedLayers.push(l.id);
+        return [];
+      }
+      layer = { ...layer, mask: { ...l.mask, page: to } };
+    }
+    if (layer.target && gone.has(layer.target)) {
+      effects.untargetedLayers.push(layer.id);
+      layer = { ...layer, target: null };
+    }
+    return [layer];
+  });
+  return {
+    ok: true,
+    model: { ...model, roles, surfaces, layers, scene: pruneScene(model.scene, surfaces) },
+    effects,
+  };
+}
+
+/** Page indices of `sourceId` that the project assigns anything to, ascending. */
+export function usedPages(model: ProjectModel, sourceId: string, extraKeys: string[] = []): number[] {
+  const pages = new Set<number>();
+  const prefix = `${sourceId}:`;
+  for (const key of [...Object.keys(model.roles), ...extraKeys])
+    if (key.startsWith(prefix)) pages.add(Number(key.slice(prefix.length)));
+  for (const s of model.surfaces) if (s.artwork.sourceId === sourceId) pages.add(s.artwork.page);
+  for (const l of model.layers)
+    if (l.mask.kind === "pdfPage" && l.mask.sourceId === sourceId) pages.add(l.mask.page);
+  return [...pages].sort((a, b) => a - b);
+}
+
 /** Why a layer cannot render, or null when it can. */
 export function layerProblem(
   model: ProjectModel,

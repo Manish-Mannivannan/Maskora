@@ -8,6 +8,7 @@ import {
   layerProblem,
   moveLayer,
   parseMaskSource,
+  remapSource,
   removeSource,
   serializeMaskSource,
   setInterpretation,
@@ -16,6 +17,7 @@ import {
   surfaceFor,
   type FinishType,
   type PageRole,
+  usedPages,
   type ProjectModel,
 } from "./model";
 
@@ -156,5 +158,65 @@ describe("mask-source union", () => {
     const model = mapK1();
     const layer = { ...model.layers[0], mask: parsed.value };
     expect(layerProblem(model, layer, [{ id: "k1", pageCount: 5 }])?.code).toBe("unsupportedMaskSource");
+  });
+});
+
+describe("reconciling a changed source page by page", () => {
+  const roleMap = (m: ProjectModel) => Object.entries(m.roles).sort();
+
+  it("moves every assignment with its page, keeping ids, types, interpretations and scene slots", () => {
+    const before = mapK1();
+    const model = ok(setInterpretation(before, before.layers[0].id, { offsetMm: [1, -2] }));
+    const front = surfaceFor(model, src(1))!.id;
+    const withScene = { ...model, scene: { ...model.scene, front } };
+    // A page was inserted at the start of the file: every page moved down by one.
+    const r = remapSource(withScene, "k1", (p) => p + 1, 6);
+    if (!r.ok) throw new Error(r.message);
+    expect(roleMap(r.model)).toEqual(
+      roleMap(before)
+        .map(([k, v]) => [`k1:${Number(k.slice(3)) + 1}`, v])
+        .sort(),
+    );
+    expect(r.model.surfaces.map((s) => [s.id, s.artwork.page])).toEqual(
+      model.surfaces.map((s) => [s.id, s.artwork.page + 1]),
+    );
+    expect(r.model.layers.map((l) => [l.id, l.type, l.target, l.interpretation])).toEqual(
+      model.layers.map((l) => [l.id, l.type, l.target, l.interpretation]),
+    );
+    expect(r.model.scene.front).toBe(front);
+    expect(r.effects).toEqual({
+      droppedPages: [],
+      droppedSurfaces: [],
+      removedLayers: [],
+      untargetedLayers: [],
+    });
+  });
+
+  it("drops pages explicitly: their surfaces and mask layers go, and targeting layers become unassigned", () => {
+    const model = mapK1();
+    const a = surfaceFor(model, src(1))!.id;
+    const raised = model.layers.find((l) => l.mask.kind === "pdfPage" && l.mask.page === 0)!.id;
+    // The new file has three pages: artwork A and the two ordinary masks survive; raised mask and artwork B do not.
+    const map = (p: number) => ({ 1: 0, 3: 1, 4: 2 })[p as 1 | 3 | 4] ?? null;
+    const r = remapSource(model, "k1", map, 3);
+    if (!r.ok) throw new Error(r.message);
+    expect(r.effects.droppedPages).toEqual([0, 2]);
+    expect(r.effects.removedLayers).toEqual([raised]);
+    expect(r.effects.droppedSurfaces).toEqual([surfaceFor(model, src(2))!.id]);
+    expect(r.model.surfaces.map((s) => [s.id, s.artwork.page])).toEqual([[a, 0]]);
+    // No surviving layer points at a page it did not come from.
+    expect(r.model.layers.map((l) => l.mask.kind === "pdfPage" && l.mask.page).sort()).toEqual([1, 2]);
+    expect(r.model.layers.every((l) => l.target === a)).toBe(true);
+  });
+
+  it("refuses a mapping onto a missing page or two pages onto one", () => {
+    const model = mapK1();
+    expect(remapSource(model, "k1", (p) => p, 3)).toMatchObject({ ok: false, code: "pageOutOfRange" });
+    expect(remapSource(model, "k1", () => 0, 5)).toMatchObject({ ok: false, code: "pageTaken" });
+  });
+
+  it("lists the pages a project uses, including override-only pages", () => {
+    expect(usedPages(mapK1(), "k1")).toEqual([0, 1, 2, 3, 4]);
+    expect(usedPages(EMPTY_MODEL, "k1", ["k1:7", "other:1"])).toEqual([7]);
   });
 });

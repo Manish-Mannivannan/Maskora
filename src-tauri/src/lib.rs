@@ -1,5 +1,6 @@
 mod geometry;
 mod project;
+mod recovery;
 mod sources;
 mod trust;
 
@@ -19,6 +20,13 @@ pub fn run() {
                 .map(|dir| dir.join("authorized-sources.json"))
                 .unwrap_or_else(|_| std::env::temp_dir().join("maskora-authorized-sources.json"));
             app.manage(trust::TrustStore::load(record));
+            // Unsaved work is kept for recovery beside it, also per installation.
+            let snapshot = app
+                .path()
+                .app_local_data_dir()
+                .map(|dir| dir.join("recovery.json"))
+                .unwrap_or_else(|_| std::env::temp_dir().join("maskora-recovery.json"));
+            app.manage(recovery::RecoveryStore::new(snapshot));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -28,7 +36,11 @@ pub fn run() {
             project::save_project,
             project::open_project,
             project::locate_source,
-            project::export_png
+            project::export_png,
+            recovery::save_recovery,
+            recovery::peek_recovery,
+            recovery::discard_recovery,
+            recovery::recover_project
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

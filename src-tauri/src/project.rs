@@ -13,6 +13,8 @@
 //!   content that differs from what the project was saved with), needing
 //!   approval (unfamiliar, or changed since approval), or missing. Nothing
 //!   the user has not approved is read.
+//! - Saving over a project written in an older schema first keeps a copy of
+//!   it beside the new file (architecture §14.3), once.
 //! - An export is written atomically too, and overwrite, permission and
 //!   disk-full outcomes are reported distinctly.
 
@@ -28,7 +30,7 @@ use crate::trust::{TrustStore, hash_file};
 
 pub const PROJECT_FORMAT: &str = "maskora-project";
 /// The newest project schema this build reads and writes.
-pub const SCHEMA_VERSION: u64 = 1;
+pub const SCHEMA_VERSION: u64 = 2;
 const MAX_PROJECT_BYTES: usize = 32 * 1024 * 1024;
 const MAX_EXPORT_BYTES: usize = 1024 * 1024 * 1024;
 const MAX_SOURCES: usize = 200;
@@ -54,7 +56,7 @@ pub struct ProjectFiles {
 }
 
 impl ProjectFiles {
-    fn register(&self, path: PathBuf) -> String {
+    pub fn register(&self, path: PathBuf) -> String {
         let token = format!("prj-{}", crate::sources::random_hex());
         self.paths
             .lock()
@@ -62,7 +64,7 @@ impl ProjectFiles {
             .insert(token.clone(), path);
         token
     }
-    fn path(&self, token: &str) -> Option<PathBuf> {
+    pub fn path(&self, token: &str) -> Option<PathBuf> {
         self.paths
             .lock()
             .expect("project registry lock poisoned")
@@ -80,6 +82,16 @@ pub fn write_atomically(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
+    // A write interrupted before its rename (a crash, a power cut) leaves only a temporary file; clear those first.
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        let prefix = format!(".{name}.");
+        for entry in entries.flatten() {
+            let n = entry.file_name().to_string_lossy().into_owned();
+            if n.starts_with(&prefix) && n.ends_with(".tmp") {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+    }
     let temp = dir.join(format!(".{name}.{}.tmp", crate::sources::random_hex()));
     let result = (|| {
         let mut file = std::fs::File::create(&temp)?;
@@ -227,54 +239,61 @@ pub fn classify_sources(
     sources
         .iter()
         .map(|s| {
-            let id = s
-                .get("id")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_owned();
+            let id = s.get("id").and_then(Value::as_str).unwrap_or_default();
             let saved = s.get("sha256").and_then(Value::as_str).unwrap_or_default();
             let reference = s.get("ref");
             let file_name = reference
                 .and_then(|r| r.get("fileName"))
                 .and_then(Value::as_str)
                 .or_else(|| s.get("name").and_then(Value::as_str))
-                .unwrap_or_default()
-                .to_owned();
+                .unwrap_or_default();
             let candidate = reference
                 .and_then(|r| r.get("relativePath"))
                 .and_then(Value::as_str)
                 .and_then(|r| resolve_ref(dir, r))
                 .or_else(|| {
                     (!file_name.is_empty() && !file_name.contains(['/', '\\']))
-                        .then(|| dir.join(&file_name))
+                        .then(|| dir.join(file_name))
                 });
-            let result = |status, reason, source| SourceOnOpen {
-                id: id.clone(),
-                file_name: file_name.clone(),
-                status,
-                reason,
-                source,
-            };
-            let Some(path) = candidate.filter(|p| p.is_file()) else {
-                return result("missing", None, None);
-            };
-            // Unrecorded paths are not even read: a project's path grants nothing.
-            if !trust.knows(&path) {
-                return result("needsApproval", Some("unfamiliar"), None);
-            }
-            let Ok((current, _)) = hash_file(&path, MAX_SOURCE_BYTES) else {
-                return result("missing", None, None);
-            };
-            if !trust.trusts(&path, &current) {
-                return result("needsApproval", Some("contentChanged"), None);
-            }
-            match registry.authorize(&path) {
-                Ok(info) if current == saved => result("authorized", None, Some(info)),
-                Ok(info) => result("changed", None, Some(info)),
-                Err(_) => result("missing", None, None),
-            }
+            classify_one(id, file_name, saved, candidate, trust, registry)
         })
         .collect()
+}
+
+/// Classify one source at `candidate` (where its reference points): only the trust record can authorize it.
+pub fn classify_one(
+    id: &str,
+    file_name: &str,
+    saved: &str,
+    candidate: Option<PathBuf>,
+    trust: &TrustStore,
+    registry: &SourceRegistry,
+) -> SourceOnOpen {
+    let result = |status, reason, source| SourceOnOpen {
+        id: id.to_owned(),
+        file_name: file_name.to_owned(),
+        status,
+        reason,
+        source,
+    };
+    let Some(path) = candidate.filter(|p| p.is_file()) else {
+        return result("missing", None, None);
+    };
+    // Unrecorded paths are not even read: a project's path grants nothing.
+    if !trust.knows(&path) {
+        return result("needsApproval", Some("unfamiliar"), None);
+    }
+    let Ok((current, _)) = hash_file(&path, MAX_SOURCE_BYTES) else {
+        return result("missing", None, None);
+    };
+    if !trust.trusts(&path, &current) {
+        return result("needsApproval", Some("contentChanged"), None);
+    }
+    match registry.authorize(&path) {
+        Ok(info) if current == saved => result("authorized", None, Some(info)),
+        Ok(info) => result("changed", None, Some(info)),
+        Err(_) => result("missing", None, None),
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -302,6 +321,8 @@ pub struct Saved {
     token: String,
     name: String,
     overwritten: bool,
+    /// The copy kept of an older-schema project this save replaced.
+    backup: Option<String>,
 }
 
 fn io_error(error: &std::io::Error, what: &str) -> ProjectError {
@@ -328,7 +349,8 @@ fn io_error(error: &std::io::Error, what: &str) -> ProjectError {
     }
 }
 
-/// Fill each source's reference (relative path and file name) and write the project.
+/// Fill each source's reference (relative path and file name) and write the project,
+/// keeping a copy of an older-schema file it replaces.
 ///
 /// A source this session has not resolved (missing, or not yet approved) keeps
 /// the reference it was opened with; saved into another folder, that reference
@@ -338,7 +360,7 @@ pub fn write_project(
     mut project: Value,
     sources: &[(String, PathBuf)],
     previous_dir: Option<&Path>,
-) -> Result<bool, ProjectError> {
+) -> Result<Written, ProjectError> {
     let dir = path.parent().unwrap_or_else(|| Path::new("."));
     if let Some(list) = project.get_mut("sources").and_then(Value::as_array_mut) {
         for s in list {
@@ -365,8 +387,57 @@ pub fn write_project(
     let text = serde_json::to_string_pretty(&project)
         .map_err(|_| err("invalidProject", "The project could not be encoded."))?;
     let existed = path.exists();
+    let backup = if existed {
+        keep_older_schema(path)?
+    } else {
+        None
+    };
     write_atomically(path, text.as_bytes()).map_err(|e| io_error(&e, "project"))?;
-    Ok(existed)
+    Ok(Written {
+        overwritten: existed,
+        backup,
+    })
+}
+
+pub struct Written {
+    pub overwritten: bool,
+    /// File name of the copy kept of an older-schema project, when one was made now.
+    pub backup: Option<String>,
+}
+
+/// Before an older-schema project is replaced, copy it to "<name> (schema N backup).maskora.json"
+/// beside it, unless that copy already exists. A file that is not a readable project is left alone.
+fn keep_older_schema(path: &Path) -> Result<Option<String>, ProjectError> {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return Ok(None);
+    };
+    let Ok(old) = serde_json::from_str::<Value>(&text) else {
+        return Ok(None);
+    };
+    let Some(version) = old.get("schemaVersion").and_then(Value::as_u64) else {
+        return Ok(None);
+    };
+    if version >= SCHEMA_VERSION
+        || old.get("format").and_then(Value::as_str) != Some(PROJECT_FORMAT)
+    {
+        return Ok(None);
+    }
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let stem = name
+        .strip_suffix(".maskora.json")
+        .or_else(|| name.strip_suffix(".json"))
+        .unwrap_or(&name);
+    let backup_name = format!("{stem} (schema {version} backup).maskora.json");
+    let backup = path.with_file_name(&backup_name);
+    if backup.exists() {
+        return Ok(None);
+    }
+    write_atomically(&backup, text.as_bytes())
+        .map_err(|e| io_error(&e, "backup of the older project"))?;
+    Ok(Some(backup_name))
 }
 
 /// Save the project. `token` saves over the file it came from unless `save_as`; otherwise a dialog asks where.
@@ -428,7 +499,7 @@ pub async fn save_project(
         }
     };
     let previous_dir = previous.as_deref().and_then(Path::parent);
-    let overwritten = write_project(&target, project, &paths, previous_dir)?;
+    let written = write_project(&target, project, &paths, previous_dir)?;
     let name = target
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
@@ -437,7 +508,8 @@ pub async fn save_project(
     Ok(Some(Saved {
         token,
         name,
-        overwritten,
+        overwritten: written.overwritten,
+        backup: written.backup,
     }))
 }
 
@@ -638,7 +710,8 @@ mod tests {
     const SHA_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
     fn project(sources: Value) -> String {
-        json!({ "format": PROJECT_FORMAT, "schemaVersion": 1, "sources": sources }).to_string()
+        json!({ "format": PROJECT_FORMAT, "schemaVersion": SCHEMA_VERSION, "sources": sources })
+            .to_string()
     }
 
     #[test]
@@ -663,7 +736,8 @@ mod tests {
     fn validation_refuses_newer_schemas_other_formats_and_bad_sources() {
         assert!(validate_project(&project(json!([{ "id": "s1", "sha256": SHA_A }]))).is_ok());
         let future =
-            json!({ "format": PROJECT_FORMAT, "schemaVersion": 2, "sources": [] }).to_string();
+            json!({ "format": PROJECT_FORMAT, "schemaVersion": SCHEMA_VERSION + 1, "sources": [] })
+                .to_string();
         assert_eq!(validate_project(&future).unwrap_err().code, "futureSchema");
         assert_eq!(
             validate_project(r#"{"format":"other","schemaVersion":1,"sources":[]}"#)
@@ -816,9 +890,15 @@ mod tests {
         std::fs::write(&pdf, b"%PDF").unwrap();
         let path = dir.join("p.maskora.json");
         let value = validate_project(&project(json!([{ "id": "s1", "sha256": SHA_A }]))).unwrap();
-        assert!(!write_project(&path, value.clone(), &[("s1".into(), pdf.clone())], None).unwrap());
         assert!(
-            write_project(&path, value, &[("s1".into(), pdf)], None).unwrap(),
+            !write_project(&path, value.clone(), &[("s1".into(), pdf.clone())], None)
+                .unwrap()
+                .overwritten
+        );
+        assert!(
+            write_project(&path, value, &[("s1".into(), pdf)], None)
+                .unwrap()
+                .overwritten,
             "the second save reports an overwrite"
         );
         let saved: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
@@ -826,6 +906,45 @@ mod tests {
             saved["sources"][0]["ref"],
             json!({ "relativePath": "art/k1.pdf", "fileName": "k1.pdf" })
         );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn saving_over_an_older_schema_keeps_the_original_once() {
+        let dir = temp_dir();
+        let path = dir.join("job.maskora.json");
+        let v1 = json!({ "format": PROJECT_FORMAT, "schemaVersion": 1, "sources": [] }).to_string();
+        std::fs::write(&path, &v1).unwrap();
+        let value = validate_project(&project(json!([]))).unwrap();
+        let written = write_project(&path, value.clone(), &[], None).unwrap();
+        assert_eq!(
+            written.backup.as_deref(),
+            Some("job (schema 1 backup).maskora.json")
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.join("job (schema 1 backup).maskora.json")).unwrap(),
+            v1,
+            "the backup is the original, byte for byte"
+        );
+        // The file is current now: saving again makes no second backup.
+        assert!(
+            write_project(&path, value, &[], None)
+                .unwrap()
+                .backup
+                .is_none()
+        );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn an_interrupted_write_leaves_nothing_behind_on_the_next() {
+        let dir = temp_dir();
+        let path = dir.join("p.maskora.json");
+        let stale = dir.join(".p.maskora.json.0123abcd.tmp");
+        std::fs::write(&stale, b"half a projec").unwrap();
+        write_atomically(&path, b"whole").unwrap();
+        assert!(!stale.exists());
+        assert_eq!(std::fs::read(&path).unwrap(), b"whole");
         std::fs::remove_dir_all(dir).unwrap();
     }
 

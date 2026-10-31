@@ -3,11 +3,12 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseProjectFile, toJson } from "./projectFile";
 
-const fixture = () =>
-  JSON.parse(readFileSync(join(__dirname, "../../tests/fixtures/model/project-v1.json"), "utf8")) as Record<
+const load = (name: string) =>
+  JSON.parse(readFileSync(join(__dirname, `../../tests/fixtures/model/${name}`), "utf8")) as Record<
     string,
     unknown
   >;
+const fixture = () => load("project-v2.json");
 
 /** A copy of the fixture with one value replaced at a dotted path. */
 function withValue(path: string, value: unknown) {
@@ -26,7 +27,7 @@ const refusal = (input: unknown) => {
   return r;
 };
 
-describe("project file, schema 1", () => {
+describe("project file, schema 2", () => {
   it("reads every saved setting and writes it back unchanged, including a future mask source verbatim", () => {
     const parsed = parseProjectFile(fixture());
     if (!parsed.ok) throw new Error(parsed.message);
@@ -47,11 +48,47 @@ describe("project file, schema 1", () => {
     expect(p.lighting).toEqual({ azimuth: 278, elevation: 10, intensity: 3.2, environmentDeg: 45 });
     expect(p.camera).toEqual({ position: [0.01, -0.2, 0.35], target: [0, 0, 0] });
     // Round trip: the serialized project equals the file it was read from.
+    expect(p.sources[0].pages?.[1]).toEqual({
+      mediaBox: [0, 0, 612, 858],
+      trimBox: [9, 9, 603, 849],
+      rotation: 90,
+      userUnit: 1,
+    });
+    expect(p.sources[1].pages).toBeNull();
+    expect(parsed.migratedFrom).toBeNull();
+    // Round trip: the serialized project equals the file it was read from.
     expect(JSON.parse(JSON.stringify(toJson(p)))).toEqual(fixture());
   });
 
+  it("migrates a schema-1 file in memory, adding what it never knew and changing nothing else", () => {
+    const v1 = load("project-v1.json");
+    const parsed = parseProjectFile(v1);
+    if (!parsed.ok) throw new Error(parsed.message);
+    expect(parsed.migratedFrom).toBe(1);
+    expect(parsed.project.schemaVersion).toBe(2);
+    const written = JSON.parse(JSON.stringify(toJson(parsed.project)));
+    const expected = {
+      ...v1,
+      schemaVersion: 2,
+      sources: (v1.sources as object[]).map((s) => ({ ...s, pages: null })),
+    };
+    expect(written).toEqual(expected);
+    // The input object is not changed by migrating it.
+    expect(v1.schemaVersion).toBe(1);
+  });
+
+  it("refuses page geometry that does not list every page or has no area", () => {
+    const root = fixture();
+    const sources = root.sources as { pages: unknown[] }[];
+    sources[0].pages = sources[0].pages.slice(0, 1);
+    expect(refusal(root).message).toMatch(/sources\[0\]\.pages: must list every page/);
+    expect(refusal(withValue("sources.0.pages.0.trimBox", [5, 5, 5, 9])).message).toMatch(
+      /trimBox: has no area/,
+    );
+  });
+
   it("refuses a newer schema with its own code, without reading further", () => {
-    const r = refusal(withValue("schemaVersion", 2));
+    const r = refusal(withValue("schemaVersion", 3));
     expect(r.code).toBe("futureSchema");
     expect(r.message).toMatch(/newer.*not changed/);
   });

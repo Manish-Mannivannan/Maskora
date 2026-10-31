@@ -32,6 +32,8 @@ export interface Saved {
   token: string;
   name: string;
   overwritten: boolean;
+  /** File name of the copy kept of an older-schema project this save replaced. */
+  backup: string | null;
 }
 
 export interface Located {
@@ -72,4 +74,40 @@ export function exportPng(png: Uint8Array, fileName: string): Promise<Exported |
   // Header values must be ASCII; the dialog only uses the name as a suggestion.
   const ascii = fileName.replace(/[^\x20-\x7e]/g, "_");
   return invoke<Exported | null>("export_png", png, { headers: { "x-file-name": ascii } });
+}
+
+export interface RecoveryRequest {
+  json: string;
+  /** Opaque to native code; the frontend's note about the saved state. */
+  meta: string;
+  sources: { id: string; handle: string; sha256: string }[];
+  token: string | null;
+}
+
+export interface Recovered {
+  /** The project file the work belonged to, if it still exists. */
+  token: string | null;
+  name: string | null;
+  json: string;
+  meta: string;
+  sources: SourceOnOpen[];
+}
+
+/** Keep a snapshot of unsaved work in local app data (not beside the project). */
+export function saveRecovery(request: RecoveryRequest): Promise<void> {
+  return invoke<void>("save_recovery", { request });
+}
+
+/** A snapshot left by an earlier session, if any. */
+export function peekRecovery(): Promise<{ savedUnix: number; meta: string } | null> {
+  return invoke("peek_recovery");
+}
+
+/** The snapshot back, with its sources judged by the trust record like a reopened project's. */
+export function recoverProject(): Promise<Recovered | null> {
+  return invoke<Recovered | null>("recover_project");
+}
+
+export function discardRecovery(): Promise<void> {
+  return invoke<void>("discard_recovery");
 }

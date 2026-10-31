@@ -10,6 +10,10 @@ fn main() {
             "open_project",
             "locate_source",
             "export_png",
+            "save_recovery",
+            "peek_recovery",
+            "discard_recovery",
+            "recover_project",
         ]),
     ))
     .expect("failed to run tauri-build");

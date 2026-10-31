@@ -10,6 +10,10 @@
     "allow-save-project",
     "allow-open-project",
     "allow-locate-source",
-    "allow-export-png"
+    "allow-export-png",
+    "allow-save-recovery",
+    "allow-peek-recovery",
+    "allow-discard-recovery",
+    "allow-recover-project"
   ]
 }

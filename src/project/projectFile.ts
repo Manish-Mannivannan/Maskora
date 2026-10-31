@@ -1,8 +1,11 @@
 /**
- * The `.maskora.json` project file, schema 1 (architecture §9, §10.1, §10.2).
+ * The `.maskora.json` project file, schema 2 (architecture §9, §10.1, §10.2,
+ * §14.3).
  *
  * A project file records intent, never content: sources by identity
- * (SHA-256, size, page count) and reference, page roles, box overrides,
+ * (SHA-256, size, page count, and since schema 2 each page's native geometry
+ * when saved, so a changed file can be compared page by page) and reference,
+ * page roles, box overrides,
  * surfaces, finish layers with their interpretation and order, recipes,
  * stock, the leaf and spread assignments, lighting, camera and view state.
  * Native code adds each source's reference (a path relative to the project
@@ -10,7 +13,9 @@
  * a path.
  *
  * Reading validates every value and reference and names the first problem
- * found. A newer schema is refused without touching the file. Mask sources
+ * found. A newer schema is refused without touching the file. An older one
+ * is migrated in memory, step by step, and reported, so the caller can keep
+ * the original before writing over it. Mask sources
  * of unsupported kinds are kept verbatim, so a project from a newer version
  * round-trips through this one unchanged.
  */
@@ -39,7 +44,7 @@ import type { PageOverride } from "./facts";
 import type { ViewState } from "./store";
 
 export const PROJECT_FORMAT = "maskora-project";
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export interface ProjectSource {
   id: string;
@@ -49,6 +54,17 @@ export interface ProjectSource {
   pageCount: number;
   /** Written by native code: where to look for the file, relative to the project file. */
   ref?: { relativePath: string | null; fileName: string };
+  /** Each page's native geometry when saved; null when it was not known (or the file came from schema 1). */
+  pages: SavedPage[] | null;
+}
+
+/** A page's geometry as the native reader stated it, in PDF user space. */
+export interface SavedPage {
+  mediaBox: Rect;
+  trimBox: Rect;
+  /** Effective /Rotate, or null when invalid. */
+  rotation: number | null;
+  userUnit: number;
 }
 
 export interface Lighting {
@@ -86,7 +102,29 @@ export interface ProjectFile {
 
 export const DEFAULT_LIGHTING: Lighting = { azimuth: 35, elevation: 40, intensity: 2.5, environmentDeg: 0 };
 
-export type ProjectParse = { ok: true; project: ProjectFile } | { ok: false; code: string; message: string };
+export type ProjectParse =
+  | {
+      ok: true;
+      project: ProjectFile;
+      /** The schema the file was written in, when older than this one: it was migrated in memory. */
+      migratedFrom: number | null;
+    }
+  | { ok: false; code: string; message: string };
+
+/**
+ * Migrations, oldest first: `MIGRATIONS[n]` turns a schema-n object into a
+ * schema-(n+1) one. Each is additive and pure; the input is not changed.
+ */
+const MIGRATIONS: Record<number, (root: Record<string, unknown>) => Record<string, unknown>> = {
+  // Schema 2 records page geometry; a schema-1 project never knew it.
+  1: (root) => ({
+    ...root,
+    schemaVersion: 2,
+    sources: Array.isArray(root.sources)
+      ? root.sources.map((s) => (isObj(s) ? { ...s, pages: null } : s))
+      : root.sources,
+  }),
+};
 
 /** A project-file object with mask sources serialized (unsupported ones verbatim). */
 export function toJson(project: ProjectFile): unknown {
@@ -143,6 +181,18 @@ const oneOf = <T extends string>(v: unknown, at: string, values: readonly T[]): 
   if (!values.includes(v as T)) throw new Invalid(at, `must be one of ${values.join(", ")}`);
   return v as T;
 };
+const rect = (v: unknown, at: string): Rect => {
+  const a = arr(v, at);
+  if (a.length !== 4) throw new Invalid(at, "must have four numbers");
+  const r = a.map((x, k) => num(x, `${at}[${k}]`)) as Rect;
+  if (!(r[2] > r[0] && r[3] > r[1])) throw new Invalid(at, "has no area");
+  return r;
+};
+const rotation = (v: unknown, at: string) => {
+  const r = num(v, at);
+  if (![0, 90, 180, 270].includes(r)) throw new Invalid(at, "must be 0, 90, 180 or 270");
+  return r;
+};
 const vec3 = (v: unknown, at: string): [number, number, number] => {
   const a = arr(v, at);
   if (a.length !== 3) throw new Invalid(at, "must have three numbers");
@@ -155,7 +205,22 @@ const BOXES: readonly SurfaceBox[] = ["TrimBox", "BleedBox", "CropBox", "MediaBo
 /** Read and validate a project file. */
 export function parseProjectFile(input: unknown): ProjectParse {
   try {
-    return { ok: true, project: read(input) };
+    let root = input;
+    let migratedFrom: number | null = null;
+    if (isObj(root) && root.format === PROJECT_FORMAT) {
+      const version = root.schemaVersion;
+      if (
+        typeof version === "number" &&
+        Number.isInteger(version) &&
+        version >= 1 &&
+        version < SCHEMA_VERSION
+      ) {
+        migratedFrom = version;
+        for (let v = version; v < SCHEMA_VERSION; v += 1)
+          root = MIGRATIONS[v](root as Record<string, unknown>);
+      }
+    }
+    return { ok: true, project: read(root), migratedFrom };
   } catch (error) {
     if (error instanceof Invalid) {
       if (error.at === "schemaVersion" && error.message.includes("newer"))
@@ -188,7 +253,22 @@ function read(input: unknown): ProjectFile {
       size: int(s.size, `${at}.size`, 0),
       sha256,
       pageCount: int(s.pageCount, `${at}.pageCount`, 1, 100_000),
+      pages: null,
     };
+    if (s.pages !== null) {
+      const pages = arr(s.pages, `${at}.pages`);
+      if (pages.length !== source.pageCount) throw new Invalid(`${at}.pages`, "must list every page");
+      source.pages = pages.map((p, k): SavedPage => {
+        const pa = `${at}.pages[${k}]`;
+        const o = obj(p, pa);
+        return {
+          mediaBox: rect(o.mediaBox, `${pa}.mediaBox`),
+          trimBox: rect(o.trimBox, `${pa}.trimBox`),
+          rotation: o.rotation === null ? null : rotation(o.rotation, `${pa}.rotation`),
+          userUnit: num(o.userUnit, `${pa}.userUnit`, 0.0001, 75000),
+        };
+      });
+    }
     if (s.ref !== undefined) {
       const ref = obj(s.ref, `${at}.ref`);
       source.ref = {

@@ -6,7 +6,15 @@
  * projects side by side (architecture §2.4).
  */
 import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
-import { locateSource, openProject, saveProject } from "@/native/project";
+import {
+  discardRecovery,
+  locateSource,
+  openProject,
+  peekRecovery,
+  recoverProject,
+  saveProject,
+  saveRecovery,
+} from "@/native/project";
 import { inspectGeometry, readSource, selectSource } from "@/native/sources";
 import { openSession } from "@/pdf/adapter";
 import { ProjectStore, type ProjectDeps } from "./store";
@@ -16,7 +24,12 @@ const nativeDeps: ProjectDeps = {
   readSource,
   inspectGeometry,
   openPdf: openSession,
-  files: { save: saveProject, open: openProject, locate: locateSource },
+  files: {
+    save: saveProject,
+    open: openProject,
+    locate: locateSource,
+    recovery: { save: saveRecovery, peek: peekRecovery, recover: recoverProject, discard: discardRecovery },
+  },
   appVersion: process.env.NEXT_PUBLIC_APP_VERSION,
   async digest(bytes) {
     const hash = await crypto.subtle.digest("SHA-256", bytes as Uint8Array<ArrayBuffer>);
@@ -28,7 +41,11 @@ const ProjectContext = createContext<ProjectStore | null>(null);
 
 export function ProjectProvider({ children }: { children: ReactNode }) {
   const [store] = useState(() => new ProjectStore(nativeDeps));
-  useEffect(() => () => store.dispose(), [store]);
+  useEffect(() => {
+    // Unsaved work from a session that ended without saving is offered back.
+    void store.checkRecovery();
+    return () => store.dispose();
+  }, [store]);
   return <ProjectContext.Provider value={store}>{children}</ProjectContext.Provider>;
 }
 
