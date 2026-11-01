@@ -28,6 +28,7 @@ import {
   coatTexture,
   faceMaterial,
   reliefTextureFrom,
+  stockMaterial,
   type FinishLook,
 } from "./finishMaterial";
 import { localFromUv, planeUvs, type FaceGeometry, type Placement } from "./layout";
@@ -388,10 +389,11 @@ export function StockEdge({
   thicknessM: number;
   roughness: number;
 }) {
+  const material = useMemo(() => stockMaterial(roughness), [roughness]);
+  useEffect(() => () => material.dispose(), [material]);
   return (
-    <mesh position={[position[0], position[1], 0]} castShadow receiveShadow>
+    <mesh position={[position[0], position[1], 0]} material={material} castShadow receiveShadow>
       <boxGeometry args={[size[0] * 0.999, size[1] * 0.999, thicknessM * 0.98]} />
-      <meshStandardMaterial color="#efece4" roughness={roughness} />
     </mesh>
   );
 }

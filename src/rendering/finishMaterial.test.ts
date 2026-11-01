@@ -3,7 +3,14 @@ import { describe, expect, it } from "vitest";
 import { compose } from "@/finish/coverage";
 import { mapsDigest, type RegistrationResult } from "@/finish/pipeline";
 import { DEFAULT_RECIPES, STOCK_PRESETS } from "@/project/model";
-import { coatDigest, coatTexture, faceMaterial, reliefTexture, type FinishLook } from "./finishMaterial";
+import {
+  coatDigest,
+  coatTexture,
+  faceMaterial,
+  reliefTexture,
+  stockMaterial,
+  type FinishLook,
+} from "./finishMaterial";
 
 const W = 24;
 const H = 16;
@@ -79,5 +86,18 @@ describe("face material", () => {
         DEFAULT_RECIPES.raisedUv,
       ),
     ).toBeNull();
+  });
+});
+
+describe("stock material", () => {
+  it("always loses the depth test to a page face a few micrometres in front of it", () => {
+    // The stock box sits 2% of the stock thickness behind each face, below the depth
+    // buffer's resolution at ordinary viewing distances; without an offset it showed
+    // through the artwork as streaks that flickered as the camera moved.
+    const m = stockMaterial(0.7);
+    expect(m.polygonOffset).toBe(true);
+    expect(m.polygonOffsetFactor).toBeGreaterThan(0);
+    expect(m.polygonOffsetUnits).toBeGreaterThan(0);
+    expect(m.roughness).toBe(0.7);
   });
 });

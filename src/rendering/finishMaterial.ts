@@ -102,6 +102,24 @@ export function faceMaterial(
   });
 }
 
+/**
+ * The stock's material, for the box between a leaf's faces. The box sits only
+ * 2% of the stock thickness behind each face (3 µm on 0.3 mm stock), less than
+ * the depth buffer resolves beyond about 0.7 m, and it is drawn after the
+ * faces, so it won ties and showed through the artwork as flickering streaks.
+ * The polygon offset keeps it at least one depth step behind at any distance,
+ * angle or thickness.
+ */
+export function stockMaterial(roughness: number) {
+  return new THREE.MeshStandardMaterial({
+    color: "#efece4",
+    roughness,
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1,
+  });
+}
+
 /** FNV-1a over the ordinary-UV then raised-UV planes held in a coat texture: equals the pipeline's map digest. */
 export function coatDigest(coat: THREE.DataTexture): string {
   const { data, width, height } = coat.image as { data: Uint8Array; width: number; height: number };

@@ -912,21 +912,21 @@
     "semantic_hash": ""
   },
   "src/rendering/PageScene.tsx": {
-    "mtime": 1793482255.4192147,
-    "seen": 1793484138.8110135,
-    "ast_hash": "9c1c9bafb40b24694d98b7779bc590c2",
+    "mtime": 1793503701.4273367,
+    "seen": 1793504755.149363,
+    "ast_hash": "5d20abe5ad9492b4873ace2bba82a468",
     "semantic_hash": ""
   },
   "src/rendering/finishMaterial.test.ts": {
-    "mtime": 1793396965.6647258,
-    "seen": 1793404997.7934117,
-    "ast_hash": "019614be9636bb5d1d9e81f6c8923f21",
+    "mtime": 1793503707.896072,
+    "seen": 1793504755.149363,
+    "ast_hash": "9e6edffb47c0efee7237857bfcf674b2",
     "semantic_hash": ""
   },
   "src/rendering/finishMaterial.ts": {
-    "mtime": 1793481911.2565837,
-    "seen": 1793484138.8110135,
-    "ast_hash": "422caf9b56315ee82f234f33e4292e9c",
+    "mtime": 1793503691.3987784,
+    "seen": 1793504755.149363,
+    "ast_hash": "c351e1b4ec155499293279e93e085f49",
     "semantic_hash": ""
   },
   "src/rendering/layout.test.ts": {
