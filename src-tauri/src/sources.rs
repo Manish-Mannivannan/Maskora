@@ -168,6 +168,13 @@ pub fn authorize_and_remember(
     trust: &crate::trust::TrustStore,
 ) -> Result<(SourceInfo, String), SourceError> {
     let info = registry.authorize(path)?;
+    // Said plainly, before reading a byte: a file over the limit is too large, not unreadable.
+    if info.size > MAX_SOURCE_BYTES {
+        return Err(SourceError::new(
+            "sourceTooLarge",
+            format!("The file is larger than the {MAX_SOURCE_BYTES}-byte limit."),
+        ));
+    }
     let (sha, size) = crate::trust::hash_file(path, MAX_SOURCE_BYTES)
         .map_err(|_| SourceError::new("sourceUnreadable", "The selected file cannot be read."))?;
     trust.remember(path, &sha, size);
@@ -248,6 +255,23 @@ mod tests {
             registry.read(&info.handle).unwrap_err().code,
             "sourceMissing"
         );
+    }
+
+    #[test]
+    fn a_file_over_the_source_limit_is_refused_as_too_large_before_it_is_read() {
+        let path = std::env::temp_dir().join(format!("maskora-big-{}.pdf", new_handle()));
+        let file = std::fs::File::create(&path).unwrap();
+        file.set_len(MAX_SOURCE_BYTES + 1).unwrap();
+        drop(file);
+        let registry = SourceRegistry::default();
+        let trust = crate::trust::TrustStore::default();
+        let e = authorize_and_remember(&path, &registry, &trust).unwrap_err();
+        assert_eq!(e.code, "sourceTooLarge");
+        assert!(
+            !trust.knows(&path),
+            "nothing is remembered for a refused file"
+        );
+        std::fs::remove_file(&path).unwrap();
     }
 
     #[test]

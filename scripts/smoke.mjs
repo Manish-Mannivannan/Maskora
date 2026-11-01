@@ -47,7 +47,15 @@ function expect(condition, message) {
 // The run writes recovery snapshots and approvals of its own; what was already there is kept aside and put back.
 const recovery = asideRecovery();
 const approvals = asideAppData("authorized-sources.json");
-const app = await openApp();
+let app;
+try {
+  app = await openApp();
+} catch (error) {
+  // A launch that fails must still put the set-aside files back.
+  recovery.restore();
+  approvals.restore();
+  throw error;
+}
 
 const data = async (name) =>
   JSON.parse(await app.exec(`return document.querySelector('[data-testid="viewport"]').dataset.${name};`));

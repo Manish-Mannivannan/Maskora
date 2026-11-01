@@ -11,7 +11,9 @@
  *   - the diagnostics log ties an export to its finish jobs and source revisions, and holds
  *     no file name, path or password.
  */
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { readPng } from "./png.mjs";
 
 export async function resourceChecks(c) {
   const { app, q, ok, expect, sleep, dialog, waitUntil, choose, settled3d, faces3d, FIXTURES, ROOT } = c;
@@ -183,6 +185,69 @@ export async function resourceChecks(c) {
   ok(
     "R4's normal map rebuilds in the worker: the window keeps drawing",
     `build ${stats.ms.toFixed(0)} ms off-thread; frames during it median ${frames.median.toFixed(1)} ms, p95 ${frames.p95.toFixed(1)} ms, worst ${frames.worst.toFixed(1)} ms (${frames.frames} frames)`,
+  );
+
+  // A large still is rendered in tiles: shrunk by half it matches the same view rendered in one piece.
+  const exportAt = async (side, path) => {
+    const size = await app.find('[data-testid="export-size"]');
+    await app.type(size, `a${side}`);
+    await click("export-png");
+    await waitUntil(
+      "export rendered",
+      `return ["writing", "failed"].includes(document.querySelector('[data-testid="export-status"]')?.dataset.kind);`,
+      120000,
+    );
+    await dialog(["-Title", "Export PNG", "-Path", path]);
+    await waitUntil(
+      "export saved",
+      `return ["saved", "failed"].includes(document.querySelector('[data-testid="export-status"]')?.dataset.kind);`,
+      60000,
+    );
+    return q(`return document.querySelector('[data-testid="export-status"]').textContent;`);
+  };
+  await click("export-framing-fit");
+  const tilesDir = join(ROOT, "probe-out", "smoke", `tiles-${Date.now()}`);
+  mkdirSync(tilesDir, { recursive: true });
+  const oneStatus = await exportAt(3000, join(tilesDir, "one.png"));
+  const tiledStatus = await exportAt(6000, join(tilesDir, "tiled.png"));
+  const one = readPng(join(tilesDir, "one.png"));
+  const tiled = readPng(join(tilesDir, "tiled.png"));
+  let diff = 0;
+  let worstRow = 0;
+  const rows = new Float64Array(one.height);
+  const cols = new Float64Array(one.width);
+  for (let y = 0; y < one.height; y += 1)
+    for (let x = 0; x < one.width; x += 1) {
+      const o = (y * one.width + x) * 4;
+      let d = 0;
+      for (let c = 0; c < 3; c += 1) {
+        let sum = 0;
+        for (const [dx, dy] of [
+          [0, 0],
+          [1, 0],
+          [0, 1],
+          [1, 1],
+        ])
+          sum += tiled.pixels[((2 * y + dy) * tiled.width + 2 * x + dx) * 4 + c];
+        d += Math.abs(sum / 4 - one.pixels[o + c]);
+      }
+      rows[y] += d / 3 / one.width;
+      cols[x] += d / 3 / one.height;
+      diff += d / 3;
+    }
+  for (let y = 0; y < one.height; y += 1) if (rows[y] > rows[worstRow]) worstRow = y;
+  const mean = diff / (one.width * one.height);
+  expect(
+    /^Saved/.test(oneStatus) && /^Saved/.test(tiledStatus) && tiled.width === one.width * 2,
+    `${oneStatus} / ${tiledStatus}`,
+  );
+  // Tiles meet at 4,096 px in the large still (row or column 2,048 of the small one): no seam may stand out.
+  const seams = [one.height > 2048 ? rows[2048] : 0, one.width > 2048 ? cols[2048] : 0];
+  const seam = Math.max(...seams);
+  expect(mean < 3 && seam < 4 * Math.max(mean, 0.5), `mean ${mean}, seams ${seams}`);
+  ok(
+    `a 6,000 px still rendered in ${Math.ceil(tiled.width / 4096) * Math.ceil(tiled.height / 4096)} tiles matches the one-piece 3,000 px still when shrunk by half`,
+    `${tiled.width} × ${tiled.height}; mean difference ${mean.toFixed(2)}/255, at the tile seams ${seams.map((v) => v.toFixed(2)).join("/")}, worst row ${worstRow} ${rows[worstRow].toFixed(2)}`,
   );
 
   // A stopped export: stopped, and its offscreen canvas is gone.

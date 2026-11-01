@@ -16,6 +16,12 @@
  *    geometry, or the normal-map fallback);
  * 3. a few frames have run, so the environment and shadow maps exist.
  *
+ * Large stills are rendered in tiles of at most 4,096 px through the
+ * camera's view offset and stitched on a 2D canvas: a single 8,192 px WebGL
+ * buffer with antialiasing needs about 0.9 GB of graphics memory, which reset
+ * the integrated GPU it was measured on (plan 2.5). Light, shadows and
+ * environment are the same for every tile, so the seams are exact.
+ *
  * A blocked or failed finish ends the export with that reason, never with a
  * partial image. The light gizmo and registration colours are not part of
  * the scene it draws.
@@ -49,6 +55,7 @@ import {
   sceneBounds,
   useSlots,
 } from "@/rendering/scene";
+import { EXPORT_TILE, exportSize, tilesFor } from "./size";
 
 export interface ExportOptions {
   /** The camera as it was in the view, or the page fitted square-on. */
@@ -80,18 +87,6 @@ export interface Captured {
   width: number;
   height: number;
   probe: ExportProbe;
-}
-
-/** Export size budget (architecture §17.3): stills are at most this many pixels on a side. */
-export const EXPORT_MAX = 8192;
-export const EXPORT_MIN = 256;
-
-/** Pixel size for a long side and aspect. */
-export function exportSize(longSide: number, aspect: number): [number, number] {
-  const a = Math.min(8, Math.max(1 / 8, aspect));
-  return a >= 1
-    ? [longSide, Math.max(1, Math.round(longSide / a))]
-    : [Math.max(1, Math.round(longSide * a)), longSide];
 }
 
 const sameProfile = (s: ReliefStats, look: FinishLook) =>
@@ -129,6 +124,15 @@ export function raisedRepresentation(
     .join("; ");
 }
 
+/** Point the export camera; its projection is the whole still's, and each tile is a window onto it. */
+function frameCamera(cam: THREE.PerspectiveCamera, pose: CameraPose, full: [number, number]) {
+  cam.position.set(...pose.position);
+  cam.lookAt(new THREE.Vector3(...pose.target));
+  cam.aspect = full[0] / full[1];
+  cam.updateProjectionMatrix();
+  cam.updateMatrixWorld();
+}
+
 function nextFrame() {
   return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 }
@@ -137,6 +141,7 @@ function nextFrame() {
 function Capture({
   ready,
   pose,
+  full,
   registry,
   onEncoding,
   onCaptured,
@@ -144,6 +149,8 @@ function Capture({
 }: {
   ready: boolean;
   pose: CameraPose;
+  /** The whole still's size; the canvas is one tile of it. */
+  full: [number, number];
   registry: FaceRegistry;
   onEncoding: () => void;
   onCaptured: (c: Omit<Captured, "probe"> & { project: ExportProbe["project"] }) => void;
@@ -165,11 +172,9 @@ function Capture({
   );
 
   useEffect(() => {
-    camera.position.set(...pose.position);
-    camera.lookAt(new THREE.Vector3(...pose.target));
-    camera.updateMatrixWorld();
+    frameCamera(camera as THREE.PerspectiveCamera, pose, full);
     invalidate();
-  }, [camera, pose, invalidate]);
+  }, [camera, pose, full, invalidate]);
 
   useEffect(() => {
     if (!ready || started.current) return;
@@ -185,25 +190,42 @@ function Capture({
         );
         return;
       }
-      // A few rendered frames build the environment and shadow maps before the one that is kept.
-      for (let i = 0; i < 4; i += 1) {
-        invalidate();
-        await nextFrame();
+      const [w, h] = full;
+      const cam = camera as THREE.PerspectiveCamera;
+      const sheet = document.createElement("canvas");
+      sheet.width = w;
+      sheet.height = h;
+      const paint = sheet.getContext("2d");
+      if (!paint) {
+        onError("renderFailed", "No drawing surface for the still.");
+        return;
       }
-      await nextFrame();
-      if (!mounted.current) return;
+      for (const [i, [x, y]] of tilesFor(w, h, size.width).entries()) {
+        cam.setViewOffset(w, h, x, y, size.width, size.height);
+        cam.updateProjectionMatrix();
+        // A few frames build the environment and shadow maps before the first tile is kept.
+        for (let k = 0; k < (i === 0 ? 4 : 2); k += 1) {
+          invalidate();
+          await nextFrame();
+        }
+        await nextFrame();
+        if (!mounted.current) return;
+        const tw = Math.min(size.width, w - x);
+        const th = Math.min(size.height, h - y);
+        paint.drawImage(gl.domElement, 0, 0, tw, th, x, y, tw, th);
+      }
+      cam.clearViewOffset();
+      cam.updateProjectionMatrix();
       report.current.onEncoding();
-      const blob = await new Promise<Blob | null>((resolve) => gl.domElement.toBlob(resolve, "image/png"));
+      const blob = await new Promise<Blob | null>((resolve) => sheet.toBlob(resolve, "image/png"));
       if (!mounted.current) return;
       if (!blob) {
         onError("encodeFailed", "The image could not be encoded as PNG.");
         return;
       }
-      const cam = camera.clone();
+      const probeCam = cam.clone();
       // The faces leave the registry when the stage unmounts; the probe keeps them as they were rendered.
       const rendered = new Map(registry);
-      const w = size.width;
-      const h = size.height;
       const png = new Uint8Array(await blob.arrayBuffer());
       if (!mounted.current) return;
       report.current.onCaptured({
@@ -213,12 +235,12 @@ function Capture({
         project: (name, mm) => {
           const entry = rendered.get(name);
           if (!entry) return null;
-          const p = worldPoint(entry, mm).world.project(cam);
+          const p = worldPoint(entry, mm).world.project(probeCam);
           return [((p.x + 1) / 2) * w, ((1 - p.y) / 2) * h];
         },
       });
     })().catch((e: Error) => onError("renderFailed", e?.message ?? String(e)));
-  }, [ready, gl, camera, size, invalidate, registry]);
+  }, [ready, gl, camera, size, full, invalidate, registry]);
 
   return null;
 }
@@ -303,6 +325,9 @@ export function ExportStage({
   const fit = snapshot.options.framing === "fit" || !snapshot.camera;
   const aspect = fit ? bounds[0] / bounds[1] : snapshot.aspect;
   const [width, height] = exportSize(snapshot.options.longSide, aspect);
+  const tileW = Math.min(width, EXPORT_TILE);
+  const tileH = Math.min(height, EXPORT_TILE);
+  const full = useMemo<[number, number]>(() => [width, height], [width, height]);
   const pose = useMemo(
     () => (fit ? presetPose("front", bounds, width / height, 1.08) : snapshot.camera!),
     // The bounds are fixed once the frozen faces exist.
@@ -370,7 +395,14 @@ export function ExportStage({
       aria-hidden
       data-testid="export-stage"
       // Laid out (so the canvas gets its size) but outside the window.
-      style={{ position: "fixed", left: -(width + 100), top: 0, width, height, pointerEvents: "none" }}
+      style={{
+        position: "fixed",
+        left: -(tileW + 100),
+        top: 0,
+        width: tileW,
+        height: tileH,
+        pointerEvents: "none",
+      }}
     >
       <Canvas
         shadows
@@ -378,7 +410,9 @@ export function ExportStage({
         frameloop="demand"
         camera={{ position: pose.position, fov: FOV, near: 0.01, far: 20 }}
         gl={{ preserveDrawingBuffer: true, alpha: true, antialias: true }}
-        onCreated={({ gl }) => {
+        onCreated={({ gl, camera }) => {
+          // The camera's aspect is the whole still's, not the tile canvas's: R3F must not reset it on resize.
+          (camera as THREE.PerspectiveCamera & { manual?: boolean }).manual = true;
           gl.toneMapping = THREE.NeutralToneMapping;
           gl.setClearColor(0x000000, 0);
           // A device reset mid-export would capture an empty or partial image: stop instead.
@@ -402,6 +436,7 @@ export function ExportStage({
         <Capture
           ready={reliefReady}
           pose={pose}
+          full={full}
           registry={registry}
           onEncoding={handleEncoding}
           onCaptured={handleCaptured}

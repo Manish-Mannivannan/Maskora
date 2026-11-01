@@ -6,9 +6,9 @@
     "semantic_hash": ""
   },
   "package.json": {
-    "mtime": 1793404816.2207818,
-    "seen": 1793404997.7934117,
-    "ast_hash": "ae0dfe147b6a1c928bb178eccc737daf",
+    "mtime": 1793486515.017476,
+    "seen": 1793487805.8161552,
+    "ast_hash": "2a62ece5335ec974ee68d4024fcb19da",
     "semantic_hash": ""
   },
   "scripts/sync-plan-issues.mjs": {
@@ -48,9 +48,9 @@
     "semantic_hash": ""
   },
   "src-tauri/tauri.conf.json": {
-    "mtime": 1793332975.9564476,
-    "seen": 1793333472.321853,
-    "ast_hash": "2be945b198a6d9c8bd32866c80ebb6ff",
+    "mtime": 1793487319.351989,
+    "seen": 1793487805.8161552,
+    "ast_hash": "187f9dfe5c1349203202bb25b59e2d33",
     "semantic_hash": ""
   },
   "tsconfig.json": {
@@ -66,9 +66,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1793329569.389075,
-    "seen": 1793330814.2098224,
-    "ast_hash": "1a16b3ff9c3db1f2dc2c5760b6a98451",
+    "mtime": 1793486933.9504027,
+    "seen": 1793487805.8161552,
+    "ast_hash": "72a2739b658439171645ca6ddcf5e3a0",
     "semantic_hash": ""
   },
   "src-tauri/icons/128x128.png": {
@@ -1131,6 +1131,18 @@
     "mtime": 1793484313.6242733,
     "seen": 1793486112.179546,
     "ast_hash": "2b81b443db2b3bc08a117f9f702bf67b",
+    "semantic_hash": ""
+  },
+  "scripts/licenses.mjs": {
+    "mtime": 1793486432.851519,
+    "seen": 1793487805.8161552,
+    "ast_hash": "6777db05b0768eadc9f0ead4bc35a5d0",
+    "semantic_hash": ""
+  },
+  "scripts/offline-check.mjs": {
+    "mtime": 1793486908.7284424,
+    "seen": 1793487805.8161552,
+    "ast_hash": "e664793370988c2ca5f3e1027d84bfd9",
     "semantic_hash": ""
   }
 }

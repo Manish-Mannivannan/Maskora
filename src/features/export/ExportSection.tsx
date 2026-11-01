@@ -15,15 +15,8 @@ import { exportPng } from "@/native/project";
 import { useProject } from "@/project/ProjectContext";
 import { blockedSources } from "@/project/store";
 import { VIEWPORT_BACKGROUND } from "@/rendering/scene";
-import {
-  EXPORT_MAX,
-  EXPORT_MIN,
-  ExportStage,
-  exportSize,
-  type Captured,
-  type ExportSnapshot,
-  type ExportStep,
-} from "./ExportStage";
+import { EXPORT_MAX, EXPORT_MIN, exportSize } from "./size";
+import { ExportStage, type Captured, type ExportSnapshot, type ExportStep } from "./ExportStage";
 
 type Progress =
   | { kind: "idle" }
